@@ -16,7 +16,7 @@ WORKDIR /var/www/html
 # Copy web files
 COPY ./web /var/www/html/
 
-# Configure nginx
+# Configure nginx with cache control headers for live reload
 RUN echo "server {\n\
     listen 9999;\n\
     server_name localhost;\n\
@@ -24,6 +24,9 @@ RUN echo "server {\n\
     index index.html;\n\
     location / {\n\
         try_files \$uri \$uri/ =404;\n\
+        add_header Cache-Control 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0';\n\
+        add_header Last-Modified \$date_gmt;\n\
+        expires off;\n\
     }\n\
 }" > /etc/nginx/sites-available/ros_web && \
     ln -s /etc/nginx/sites-available/ros_web /etc/nginx/sites-enabled/ && \

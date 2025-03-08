@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Build the test Docker image
-echo "Building the test publisher Docker image..."
-docker build -t ros_test_publisher -f Dockerfile.test .
+# Start the test container
+echo "Starting test container..."
+docker-compose up -d ros_emotion_test
 
-# Run the Docker container
-echo "Starting the test publisher container..."
-docker run -it --rm --name ros_test_publisher_container --network="host" ros_test_publisher 
+# Show logs
+echo "Showing logs from ros_emotion_test_container..."
+docker logs -f ros_emotion_test_container 

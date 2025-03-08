@@ -32,5 +32,11 @@ def generate_launch_description():
             executable='visualization_node',
             name='visualization_node',
             output='screen'
+        ),
+        Node(
+            package='ros_emotion',
+            executable='test_input_publisher',
+            name='test_input_publisher',
+            output='screen'
         )
     ]) 

@@ -4,10 +4,22 @@ services:
   ros_emotion:
     build:
       context: .
-      dockerfile: Dockerfile.test  # Using the test publisher for simplicity
+      dockerfile: Dockerfile  # Using the main Dockerfile
     container_name: ros_emotion_container
     restart: unless-stopped
     network_mode: host
+    volumes:
+      - ./ros_emotion:/ros_ws/src/ros_emotion
+
+  ros_emotion_test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test  # Using the test Dockerfile
+    container_name: ros_emotion_test_container
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./ros_emotion:/ros_ws/src/ros_emotion
 
   web_interface:
     build:
@@ -18,6 +30,8 @@ services:
     ports:
       - "9999:9999"
       - "9090:9090"
+    volumes:
+      - ./web_interface/web:/var/www/html
     depends_on:
       - ros_emotion
     # Override the default command to make sure the entrypoint is called

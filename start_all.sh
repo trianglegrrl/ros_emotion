@@ -1,8 +1,12 @@
 #!/bin/bash
 
-# Build and start both containers using Docker Compose
-echo "Starting ROS Emotion and Web Interface containers..."
+# Start all containers
+echo "Starting all containers..."
 docker-compose up -d
+
+# Show logs
+echo "Showing logs from ros_emotion_container..."
+docker logs -f ros_emotion_container
 
 echo ""
 echo "ROS Emotion system is running!"

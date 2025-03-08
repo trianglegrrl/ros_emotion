@@ -1,0 +1,105 @@
+/**
+ * Configuration for the ROS Emotion System
+ */
+
+emotional_state_manager:
+  # Default initial emotional state
+  initial_state:
+    pleasure: 0.0
+    arousal: 0.0
+    dominance: 0.0
+    happiness: 0.0
+    sadness: 0.0
+    anger: 0.0
+    fear: 0.0
+    disgust: 0.0
+    surprise: 0.0
+    intensity: 0.0
+    confidence: 1.0
+  
+  # Decay rates for emotions (per second)
+  decay_rates:
+    pleasure: 0.01
+    arousal: 0.02
+    dominance: 0.005
+    happiness: 0.02
+    sadness: 0.01
+    anger: 0.03
+    fear: 0.02
+    disgust: 0.01
+    surprise: 0.05
+  
+  # Minimum threshold for emotions to be considered active
+  threshold: 0.05
+  
+  # Maximum rate of change for emotional dimensions
+  max_rate_of_change: 0.2
+  
+  # Update frequency in Hz
+  update_frequency: 10.0
+
+sensory_input_processor:
+  # Default priority for different input types
+  default_priorities:
+    visual: 0.7
+    auditory: 0.8
+    text: 0.5
+    touch: 0.9
+    combined: 0.8
+  
+  # Input buffer size
+  buffer_size: 10
+  
+  # Update frequency in Hz
+  update_frequency: 5.0
+
+llm_integration:
+  # LLM service endpoint
+  endpoint: "http://localhost:8000/v1/chat/completions"
+  
+  # API key (if needed)
+  api_key: ""
+  
+  # Model to use
+  model: "gpt-3.5-turbo"
+  
+  # Maximum tokens for response
+  max_tokens: 150
+  
+  # Temperature for generation
+  temperature: 0.7
+  
+  # System prompt template
+  system_prompt: "You are an emotion processing system for a robot. Given the current emotional state and a sensory input, determine how the robot's emotional state should change."
+  
+  # Request timeout in seconds
+  timeout: 5.0
+  
+  # Update frequency in Hz
+  update_frequency: 1.0
+
+rumination_engine:
+  # Maximum number of active ruminations
+  max_active_ruminations: 3
+  
+  # Rumination stages
+  stages: 5
+  
+  # Time between rumination updates (seconds)
+  update_interval: 5.0
+  
+  # Probability of continuing rumination at each stage
+  continuation_probability: 0.8
+  
+  # Decay rate for rumination intensity
+  intensity_decay: 0.1
+  
+  # Update frequency in Hz
+  update_frequency: 0.2
+
+visualization:
+  # Update frequency in Hz
+  update_frequency: 10.0
+  
+  # History length for time series visualization
+  history_length: 100 
