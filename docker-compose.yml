@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+  ros_emotion:
+    build:
+      context: .
+      dockerfile: Dockerfile.test  # Using the test publisher for simplicity
+    container_name: ros_emotion_container
+    restart: unless-stopped
+    network_mode: host
+
+  web_interface:
+    build:
+      context: ./web_interface
+      dockerfile: Dockerfile
+    container_name: ros_web_interface_container
+    restart: unless-stopped
+    ports:
+      - "9999:9999"
+      - "9090:9090"
+    depends_on:
+      - ros_emotion
+    # Override the default command to make sure the entrypoint is called
+    command: bash -c "tail -f /dev/null" 

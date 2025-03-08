@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS Topic Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        #topicList {
+            list-style-type: none;
+            padding: 0;
+        }
+        .topic-item {
+            margin-bottom: 10px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .topic-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .topic-name {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .topic-type {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        .topic-messages {
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0069d9;
+        }
+        .refresh-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+        }
+        .debug-info {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .connection-options {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f8ff;
+            border-radius: 4px;
+        }
+        .connection-options input {
+            padding: 8px;
+            margin-right: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ROS Topic Viewer</h1>
+        
+        <div id="status" class="status disconnected">
+            Disconnected from ROS
+        </div>
+
+        <div class="connection-options">
+            <h3>Connection Options</h3>
+            <div>
+                <label for="wsUrlInput">WebSocket URL:</label>
+                <input type="text" id="wsUrlInput" value="ws://localhost:9090" style="width: 250px;">
+                <button id="connectButton">Connect</button>
+            </div>
+        </div>
+        
+        <button id="refreshTopics" class="refresh-btn">Refresh Topics</button>
+        
+        <h2>Topics:</h2>
+        <div id="topicList"></div>
+
+        <div class="debug-info">
+            <h3>Debug Information</h3>
+            <div id="debugInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize connection to ROS
+        let ros;
+        let topicSubscriptions = {};
+        
+        function addDebugMessage(message) {
+            const debugInfo = document.getElementById('debugInfo');
+            const timestamp = new Date().toISOString();
+            const msgElement = document.createElement('div');
+            msgElement.textContent = `[${timestamp}] ${message}`;
+            debugInfo.appendChild(msgElement);
+            // Keep only the latest 10 messages
+            if (debugInfo.childNodes.length > 10) {
+                debugInfo.removeChild(debugInfo.firstChild);
+            }
+        }
+        
+        function initRosConnection(wsUrl) {
+            // Clear existing connection
+            if (ros) {
+                ros.close();
+            }
+            
+            addDebugMessage(`Attempting to connect to ROS WebSocket at: ${wsUrl}`);
+            
+            ros = new ROSLIB.Ros({
+                url: wsUrl
+            });
+
+            ros.on('connection', function() {
+                addDebugMessage('Connected to websocket server.');
+                document.getElementById('status').className = 'status connected';
+                document.getElementById('status').innerHTML = 'Connected to ROS';
+                getTopics();
+            });
+
+            ros.on('error', function(error) {
+                addDebugMessage(`Error connecting to websocket server: ${error}`);
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').innerHTML = 'Error connecting to ROS';
+            });
+
+            ros.on('close', function() {
+                addDebugMessage('Connection to websocket server closed.');
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').innerHTML = 'Disconnected from ROS';
+            });
+        }
+
+        // Get list of available topics
+        function getTopics() {
+            if (!ros || !ros.isConnected) {
+                addDebugMessage('Cannot get topics: Not connected to ROS');
+                return;
+            }
+            
+            addDebugMessage('Requesting topics list...');
+            
+            ros.getTopics(function(result) {
+                const topics = result.topics;
+                const topicTypes = result.types;
+                
+                addDebugMessage(`Received ${topics.length} topics`);
+                
+                const topicListElement = document.getElementById('topicList');
+                topicListElement.innerHTML = '';
+                
+                // Unsubscribe from all current topics
+                Object.keys(topicSubscriptions).forEach(topic => {
+                    if (topicSubscriptions[topic]) {
+                        topicSubscriptions[topic].unsubscribe();
+                        delete topicSubscriptions[topic];
+                    }
+                });
+                
+                topics.forEach((topic, index) => {
+                    const topicItem = document.createElement('div');
+                    topicItem.className = 'topic-item';
+                    
+                    const topicHeader = document.createElement('div');
+                    topicHeader.className = 'topic-header';
+                    
+                    const topicName = document.createElement('div');
+                    topicName.className = 'topic-name';
+                    topicName.textContent = topic;
+                    
+                    const topicType = document.createElement('div');
+                    topicType.className = 'topic-type';
+                    topicType.textContent = topicTypes[index];
+                    
+                    const subscribeBtn = document.createElement('button');
+                    subscribeBtn.textContent = 'Subscribe';
+                    subscribeBtn.onclick = function() {
+                        if (topicSubscriptions[topic]) {
+                            // Already subscribed, unsubscribe
+                            topicSubscriptions[topic].unsubscribe();
+                            delete topicSubscriptions[topic];
+                            subscribeBtn.textContent = 'Subscribe';
+                            
+                            // Remove message container
+                            const existingMessageContainer = topicItem.querySelector('.topic-messages');
+                            if (existingMessageContainer) {
+                                topicItem.removeChild(existingMessageContainer);
+                            }
+                        } else {
+                            // Subscribe to topic
+                            subscribeToTopic(topic, topicTypes[index], topicItem);
+                            subscribeBtn.textContent = 'Unsubscribe';
+                        }
+                    };
+                    
+                    topicHeader.appendChild(topicName);
+                    topicHeader.appendChild(topicType);
+                    topicHeader.appendChild(subscribeBtn);
+                    
+                    topicItem.appendChild(topicHeader);
+                    topicListElement.appendChild(topicItem);
+                });
+            });
+        }
+
+        // Subscribe to a specific topic
+        function subscribeToTopic(topicName, topicType, topicElement) {
+            // Create message container if it doesn't exist
+            let messageContainer = topicElement.querySelector('.topic-messages');
+            if (!messageContainer) {
+                messageContainer = document.createElement('div');
+                messageContainer.className = 'topic-messages';
+                topicElement.appendChild(messageContainer);
+            }
+            
+            addDebugMessage(`Subscribing to topic: ${topicName}`);
+            
+            const topic = new ROSLIB.Topic({
+                ros: ros,
+                name: topicName,
+                messageType: topicType
+            });
+            
+            topic.subscribe(function(message) {
+                addDebugMessage(`Received message on topic: ${topicName}`);
+                const messageElement = document.createElement('div');
+                messageElement.textContent = JSON.stringify(message, null, 2);
+                
+                // Keep only the latest 5 messages
+                if (messageContainer.childNodes.length >= 5) {
+                    messageContainer.removeChild(messageContainer.firstChild);
+                }
+                
+                messageContainer.appendChild(messageElement);
+                messageContainer.scrollTop = messageContainer.scrollHeight;
+            });
+            
+            topicSubscriptions[topicName] = topic;
+        }
+
+        // Event listeners
+        document.getElementById('refreshTopics').addEventListener('click', getTopics);
+        
+        document.getElementById('connectButton').addEventListener('click', function() {
+            const wsUrl = document.getElementById('wsUrlInput').value;
+            initRosConnection(wsUrl);
+        });
+        
+        // Initialize with default URL
+        const hostname = window.location.hostname;
+        const defaultWsUrl = 'ws://' + hostname + ':9090';
+        document.getElementById('wsUrlInput').value = defaultWsUrl;
+        
+        // Wait for the page to load before connecting
+        window.addEventListener('load', function() {
+            addDebugMessage('Page loaded');
+            // Auto-connect after 1 second
+            setTimeout(function() {
+                const wsUrl = document.getElementById('wsUrlInput').value;
+                initRosConnection(wsUrl);
+            }, 1000);
+        });
+    </script>
+</body>
+</html> 

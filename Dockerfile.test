@@ -1,0 +1,8 @@
+FROM ros:foxy
+
+# Copy our test publisher
+COPY test_publisher.py /test_publisher.py
+RUN chmod +x /test_publisher.py
+
+# Command to run when container starts
+CMD ["python3", "/test_publisher.py"] 
