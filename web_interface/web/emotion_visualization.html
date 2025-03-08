@@ -7,7 +7,6 @@
     <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="livereload.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -175,6 +174,54 @@
             height: 300px;
             margin-top: 20px;
         }
+        .sensory-input-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff3cd;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .sensory-input-form {
+            display: flex;
+            flex-direction: column;
+        }
+        .sensory-input-form textarea {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            height: 80px;
+            resize: vertical;
+        }
+        .sensory-input-form button {
+            align-self: flex-end;
+            margin-top: 5px;
+        }
+        .message-log {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .message-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid #6c757d;
+            background-color: #e9ecef;
+            border-radius: 2px;
+        }
+        .message-item.sensory-input {
+            border-left-color: #fd7e14;
+        }
+        .message-item.state-change {
+            border-left-color: #20c997;
+        }
+        .message-item.rumination {
+            border-left-color: #6f42c1;
+        }
     </style>
 </head>
 <body>
@@ -197,6 +244,19 @@
                 <input type="text" id="wsUrlInput" value="ws://localhost:9090" style="width: 250px;">
                 <button id="connectButton">Connect</button>
             </div>
+        </div>
+        
+        <div class="sensory-input-container">
+            <h3>Sensory Input</h3>
+            <div class="sensory-input-form">
+                <textarea id="sensoryInputText" placeholder="Enter a sensory observation (e.g., 'I see a friendly dog wagging its tail')"></textarea>
+                <button id="sendSensoryInput">Send Observation</button>
+            </div>
+        </div>
+        
+        <div class="message-log">
+            <h3>Activity Log</h3>
+            <div id="messageLog"></div>
         </div>
         
         <div class="emotion-state">
@@ -260,6 +320,8 @@
         let ros;
         let emotionalStateSubscription;
         let ruminationSubscription;
+        let sensoryInputPublisher;
+        let emotionalResponseSubscription;
         
         // Chart objects
         let emotionsChart;
@@ -288,6 +350,23 @@
             }
         }
         
+        function addMessageToLog(message, type) {
+            const messageLog = document.getElementById('messageLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const msgElement = document.createElement('div');
+            msgElement.className = `message-item ${type}`;
+            msgElement.innerHTML = `<strong>[${timestamp}]</strong>: ${message}`;
+            messageLog.appendChild(msgElement);
+            
+            // Auto-scroll to bottom
+            messageLog.scrollTop = messageLog.scrollHeight;
+            
+            // Keep only the latest 20 messages
+            if (messageLog.childNodes.length > 20) {
+                messageLog.removeChild(messageLog.firstChild);
+            }
+        }
+        
         function initRosConnection(wsUrl) {
             // Clear existing connection
             if (ros) {
@@ -302,6 +381,11 @@
                     ruminationSubscription.unsubscribe();
                     ruminationSubscription = null;
                 }
+                
+                if (emotionalResponseSubscription) {
+                    emotionalResponseSubscription.unsubscribe();
+                    emotionalResponseSubscription = null;
+                }
             }
             
             addDebugMessage(`Attempting to connect to ROS WebSocket at: ${wsUrl}`);
@@ -315,11 +399,17 @@
                 document.getElementById('status').className = 'status connected';
                 document.getElementById('status').innerHTML = 'Connected to ROS';
                 
+                // Setup publishers
+                setupPublishers();
+                
                 // Subscribe to emotional state
                 subscribeToEmotionalState();
                 
                 // Subscribe to rumination updates
                 subscribeToRuminations();
+                
+                // Subscribe to emotional responses
+                subscribeToEmotionalResponses();
             });
 
             ros.on('error', function(error) {
@@ -335,6 +425,41 @@
             });
         }
         
+        function setupPublishers() {
+            sensoryInputPublisher = new ROSLIB.Topic({
+                ros: ros,
+                name: '/sensory_input',
+                messageType: 'ros_emotion/SensoryInput'
+            });
+            
+            addDebugMessage('Sensory input publisher created');
+        }
+        
+        function sendSensoryInput() {
+            if (!ros || !sensoryInputPublisher) {
+                addMessageToLog('Cannot send input: Not connected to ROS', 'error');
+                return;
+            }
+            
+            const inputText = document.getElementById('sensoryInputText').value.trim();
+            if (!inputText) {
+                addMessageToLog('Cannot send empty sensory input', 'error');
+                return;
+            }
+            
+            const message = new ROSLIB.Message({
+                input_text: inputText,
+                timestamp: new Date().toISOString()
+            });
+            
+            sensoryInputPublisher.publish(message);
+            addMessageToLog(`Sensory input sent: "${inputText}"`, 'sensory-input');
+            addDebugMessage(`Published sensory input: ${inputText}`);
+            
+            // Clear the input field
+            document.getElementById('sensoryInputText').value = '';
+        }
+        
         function subscribeToEmotionalState() {
             addDebugMessage('Subscribing to emotional_state topic');
             
@@ -347,6 +472,27 @@
             emotionalStateSubscription.subscribe(function(message) {
                 addDebugMessage('Received emotional state update');
                 updateEmotionalStateDisplay(message);
+            });
+        }
+        
+        function subscribeToEmotionalResponses() {
+            addDebugMessage('Subscribing to emotional_response topic');
+            
+            emotionalResponseSubscription = new ROSLIB.Topic({
+                ros: ros,
+                name: '/emotional_response',
+                messageType: 'ros_emotion/EmotionalResponse'
+            });
+            
+            emotionalResponseSubscription.subscribe(function(message) {
+                addDebugMessage('Received emotional response');
+                
+                // Add to message log
+                if (message.is_rumination) {
+                    addMessageToLog(`Rumination: ${message.response_text}`, 'rumination');
+                } else {
+                    addMessageToLog(`State change: ${message.response_text}`, 'state-change');
+                }
             });
         }
         
@@ -447,6 +593,31 @@
             emotionsChart.update();
         }
         
+        function updateHistoryChart(state) {
+            // Add new data points
+            historyData.pleasure.push(state.pleasure);
+            historyData.arousal.push(state.arousal);
+            historyData.dominance.push(state.dominance);
+            
+            // Remove old data points
+            if (historyData.pleasure.length > historyDataPoints) {
+                historyData.pleasure.shift();
+                historyData.arousal.shift();
+                historyData.dominance.shift();
+            }
+            
+            if (!historyChart) {
+                initHistoryChart();
+            }
+            
+            // Update data
+            historyChart.data.datasets[0].data = [...historyData.pleasure];
+            historyChart.data.datasets[1].data = [...historyData.arousal];
+            historyChart.data.datasets[2].data = [...historyData.dominance];
+            
+            historyChart.update();
+        }
+        
         function initEmotionsChart() {
             const ctx = document.getElementById('emotionsChart').getContext('2d');
             emotionsChart = new Chart(ctx, {
@@ -482,31 +653,6 @@
                     }
                 }
             });
-        }
-        
-        function updateHistoryChart(state) {
-            // Add new data points
-            historyData.pleasure.push(state.pleasure);
-            historyData.arousal.push(state.arousal);
-            historyData.dominance.push(state.dominance);
-            
-            // Remove old data points
-            if (historyData.pleasure.length > historyDataPoints) {
-                historyData.pleasure.shift();
-                historyData.arousal.shift();
-                historyData.dominance.shift();
-            }
-            
-            if (!historyChart) {
-                initHistoryChart();
-            }
-            
-            // Update data
-            historyChart.data.datasets[0].data = [...historyData.pleasure];
-            historyChart.data.datasets[1].data = [...historyData.arousal];
-            historyChart.data.datasets[2].data = [...historyData.dominance];
-            
-            historyChart.update();
         }
         
         function initHistoryChart() {
@@ -615,6 +761,18 @@
         document.getElementById('connectButton').addEventListener('click', function() {
             const wsUrl = document.getElementById('wsUrlInput').value;
             initRosConnection(wsUrl);
+        });
+        
+        document.getElementById('sendSensoryInput').addEventListener('click', function() {
+            sendSensoryInput();
+        });
+        
+        // Also allow sending with Enter key when in textarea
+        document.getElementById('sensoryInputText').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault(); // Prevent newline
+                sendSensoryInput();
+            }
         });
         
         // Initialize with default URL

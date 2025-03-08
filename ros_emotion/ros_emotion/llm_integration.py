@@ -3,7 +3,8 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-from ros_emotion.msg import EmotionalState, SensoryInput, RuminationUpdate
+from ros_emotion.msg import EmotionalState, SensoryInput, RuminationUpdate, EmotionalResponse
+from ros_emotion.srv import EmotionModify
 import requests
 import json
 import uuid
@@ -32,6 +33,12 @@ class LLMIntegration(Node):
             qos
         )
         
+        self.emotional_response_pub = self.create_publisher(
+            EmotionalResponse,
+            'emotional_response',
+            qos
+        )
+        
         # Create subscribers
         self.emotional_state_sub = self.create_subscription(
             EmotionalState,
@@ -47,8 +54,14 @@ class LLMIntegration(Node):
             qos
         )
         
+        # Service client for modifying emotional state
+        self.emotion_modify_client = self.create_client(
+            EmotionModify,
+            'emotion_modify'
+        )
+        
         # Store the current emotional state
-        self.current_emotional_state = None
+        self.current_emotional_state = EmotionalState()
         
         # Store recent sensory inputs
         self.recent_inputs = []
@@ -62,7 +75,7 @@ class LLMIntegration(Node):
         )
         
         # LLM configuration
-        self.endpoint = self.llm_config.get('endpoint', 'http://localhost:8000/v1/chat/completions')
+        self.api_base_url = self.llm_config.get('api_base_url', 'http://localhost:8000/api')
         self.api_key = self.llm_config.get('api_key', '')
         self.model = self.llm_config.get('model', 'gpt-3.5-turbo')
         self.max_tokens = self.llm_config.get('max_tokens', 150)
@@ -80,15 +93,179 @@ class LLMIntegration(Node):
         self.get_logger().debug(f"ALAINA: Updated emotional state: {msg.description}")
     
     def sensory_input_callback(self, msg):
-        """Process incoming sensory input."""
-        self.get_logger().info(f"ALAINA: Received sensory input for LLM processing: {msg.description}")
+        """Process sensory input using LLM"""
+        self.get_logger().info(f"ALAINA: Received sensory input: {msg.description}")
         
-        # Add to recent inputs
-        self.recent_inputs.append(msg)
+        # Create an identifier for this sensory input
+        input_id = str(uuid.uuid4())
         
-        # Keep only the most recent inputs
-        if len(self.recent_inputs) > self.max_recent_inputs:
-            self.recent_inputs.pop(0)
+        # Process with LLM to determine emotional impact
+        response = self.query_llm_for_sensory_processing(msg, input_id)
+        
+        if response:
+            # Update emotional state based on LLM response
+            self.update_emotional_state(response, input_id, msg, is_rumination=False)
+        else:
+            self.get_logger().error("ALAINA: Failed to get LLM response for sensory input")
+    
+    def query_llm_for_sensory_processing(self, sensory_input, input_id):
+        """Query LLM to analyze sensory input and determine emotional impact"""
+        try:
+            # Build prompt for the LLM
+            prompt = self.build_sensory_processing_prompt(sensory_input)
+            
+            # Call LLM API
+            response = self.call_llm_api(prompt)
+            
+            if response:
+                self.get_logger().info(f"ALAINA: LLM response for input {input_id}: {response[:100]}...")
+                
+                # Parse the response
+                parsed_response = self.parse_llm_response(response)
+                return parsed_response
+            else:
+                return None
+        except Exception as e:
+            self.get_logger().error(f"ALAINA: Error querying LLM for sensory processing: {str(e)}")
+            return None
+    
+    def build_sensory_processing_prompt(self, sensory_input):
+        """Build a prompt for the LLM to process sensory input"""
+        # Format the current emotional state
+        current_state = {
+            "pleasure": self.current_emotional_state.pleasure,
+            "arousal": self.current_emotional_state.arousal,
+            "dominance": self.current_emotional_state.dominance,
+            "primary_emotion": self.current_emotional_state.primary_emotion,
+            "secondary_emotion": self.current_emotional_state.secondary_emotion,
+            "intensity": self.current_emotional_state.intensity
+        }
+        
+        # Build the prompt
+        prompt = f"""You are the emotional processing system for a robot. 
+Given the following sensory input and current emotional state, determine how the emotional state should change:
+
+CURRENT EMOTIONAL STATE:
+{json.dumps(current_state, indent=2)}
+
+SENSORY INPUT:
+Type: {sensory_input.input_type}
+Description: {sensory_input.description}
+Source: {sensory_input.source}
+Intensity: {sensory_input.intensity}
+Priority: {sensory_input.priority}
+
+Based on this information, determine:
+1. How should the emotional state change? 
+2. What should be the primary emotion after this input?
+3. What should be the response text that explains this change?
+
+Respond ONLY with a valid JSON object in the following format:
+{
+  "pleasure_delta": float (-1.0 to 1.0),
+  "arousal_delta": float (-1.0 to 1.0),
+  "dominance_delta": float (-1.0 to 1.0),
+  "primary_emotion": string,
+  "intensity": float (0.0 to 1.0),
+  "confidence": float (0.0 to 1.0),
+  "response_text": string
+}"""
+        
+        return prompt
+    
+    def call_llm_api(self, prompt):
+        """Call the LLM API with the given prompt"""
+        try:
+            # Create request payload
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature
+            }
+            
+            # For demonstration, we'll use a simple response
+            # In a real implementation, this would make an API call to an LLM service
+            
+            self.get_logger().info("ALAINA: Simulating LLM API call (would connect to real API in production)")
+            
+            # Simulate API response (for demo purposes)
+            # In production, this would be: response = requests.post(f"{self.api_base_url}/completions", json=payload, headers={"Authorization": f"Bearer {self.api_key}"})
+            
+            # Mock response for demonstration
+            return json.dumps({
+                "pleasure_delta": 0.2 if "friendly" in prompt or "happy" in prompt else -0.2,
+                "arousal_delta": 0.3 if "exciting" in prompt or "surprising" in prompt else -0.1,
+                "dominance_delta": 0.1 if "control" in prompt or "mastery" in prompt else -0.1,
+                "primary_emotion": "joy" if "friendly" in prompt or "happy" in prompt else "sadness",
+                "intensity": 0.7,
+                "confidence": 0.8,
+                "response_text": f"Processing sensory input: {prompt.split('Description: ')[1].split('\n')[0]}"
+            })
+            
+        except Exception as e:
+            self.get_logger().error(f"ALAINA: Error calling LLM API: {str(e)}")
+            return None
+    
+    def parse_llm_response(self, response_text):
+        """Parse the LLM response"""
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError as e:
+            self.get_logger().error(f"ALAINA: Error parsing LLM response: {str(e)}")
+            return None
+    
+    def update_emotional_state(self, llm_response, input_id, original_input=None, is_rumination=False):
+        """Update the emotional state based on LLM response"""
+        if not llm_response:
+            return
+        
+        # Create the emotional response message
+        response_msg = EmotionalResponse()
+        response_msg.timestamp.sec = int(time.time())
+        response_msg.timestamp.nanosec = int((time.time() % 1) * 1e9)
+        response_msg.stimulus_id = input_id
+        response_msg.is_rumination = is_rumination
+        response_msg.response_text = llm_response.get("response_text", "")
+        response_msg.source = "llm"
+        response_msg.previous_state = self.current_emotional_state
+        response_msg.pleasure_delta = llm_response.get("pleasure_delta", 0.0)
+        response_msg.arousal_delta = llm_response.get("arousal_delta", 0.0)
+        response_msg.dominance_delta = llm_response.get("dominance_delta", 0.0)
+        response_msg.primary_emotion = llm_response.get("primary_emotion", "neutral")
+        response_msg.intensity = llm_response.get("intensity", 0.5)
+        response_msg.confidence = llm_response.get("confidence", 0.5)
+        response_msg.metadata = json.dumps({
+            "original_input": original_input.description if original_input else "none"
+        })
+        
+        # Publish the emotional response
+        self.emotional_response_pub.publish(response_msg)
+        self.get_logger().info(f"ALAINA: Published emotional response for {input_id}")
+        
+        # Wait for service to be available
+        while not self.emotion_modify_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info('ALAINA: Waiting for emotion_modify service...')
+        
+        # Create service request
+        request = EmotionModify.Request()
+        request.pleasure_delta = llm_response.get("pleasure_delta", 0.0)
+        request.arousal_delta = llm_response.get("arousal_delta", 0.0)
+        request.dominance_delta = llm_response.get("dominance_delta", 0.0)
+        request.primary_emotion = llm_response.get("primary_emotion", "neutral")
+        request.intensity = llm_response.get("intensity", 0.5)
+        
+        # Call service
+        future = self.emotion_modify_client.call_async(request)
+        future.add_done_callback(lambda f: self.emotion_modify_callback(f, input_id))
+    
+    def emotion_modify_callback(self, future, input_id):
+        """Callback for emotion modify service response"""
+        try:
+            response = future.result()
+            self.get_logger().info(f"ALAINA: Emotional state updated successfully for {input_id}")
+        except Exception as e:
+            self.get_logger().error(f"ALAINA: Service call failed: {str(e)}")
     
     def process_inputs(self):
         """Process pending sensory inputs with the LLM."""
@@ -167,7 +344,7 @@ Provide a response in the following JSON format:
         # Make the request
         try:
             response = requests.post(
-                self.endpoint,
+                self.api_base_url + '/completions',
                 headers=headers,
                 json=data,
                 timeout=self.timeout

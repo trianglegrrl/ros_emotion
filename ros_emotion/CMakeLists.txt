@@ -26,6 +26,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/EmotionalState.msg"
   "msg/SensoryInput.msg"
   "msg/RuminationUpdate.msg"
+  "msg/EmotionalResponse.msg"
   "srv/EmotionQuery.srv"
   "srv/EmotionModify.srv"
   DEPENDENCIES builtin_interfaces std_msgs
