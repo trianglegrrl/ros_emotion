@@ -7,9 +7,12 @@ from ros_emotion.msg import EmotionalState, SensoryInput, RuminationUpdate
 from ros_emotion.srv import EmotionQuery, EmotionModify
 import numpy as np
 import uuid
+import json
 import ros_emotion.utils as utils
 # Import our emotion model
 from ros_emotion.emotion_model import create_emotion_model, EmotionModel, PADBasicEmotionModel
+# Import our personality model
+from ros_emotion.personality_model import create_personality_model, PersonalityModel
 import os
 
 class EmotionalStateManager(Node):
@@ -25,6 +28,11 @@ class EmotionalStateManager(Node):
         # Initialize the emotion model
         emotion_model_type = self.manager_config.get('emotion_model_type', 'pad_basic')
         self.emotion_model = create_emotion_model(emotion_model_type)
+        
+        # Initialize the personality model
+        personality_model_type = self.manager_config.get('personality_model_type', 'hybrid')
+        personality_config = self.manager_config.get('personality', {})
+        self.personality_model = create_personality_model(personality_model_type, personality_config)
         
         self.initialize_emotional_state()
         
@@ -81,7 +89,16 @@ class EmotionalStateManager(Node):
             self.update_emotional_state
         )
         
+        # Create timer for less frequent personality influence
+        personality_update_frequency = self.manager_config.get('personality_update_frequency', 1.0)
+        self.personality_timer = self.create_timer(
+            1.0 / personality_update_frequency,
+            self.apply_personality_influence
+        )
+        
         self.get_logger().info("ALAINA: Emotional State Manager initialized")
+        self.get_logger().info(f"ALAINA: Using personality model: {personality_model_type}")
+        self.get_logger().debug(f"ALAINA: Personality traits: {self.personality_model.format_personality_traits()}")
     
     def initialize_emotional_state(self):
         """Initialize the emotional state with default values."""
@@ -122,10 +139,91 @@ class EmotionalStateManager(Node):
         if not self.emotional_state.description:
             self.emotional_state.description = "Initial emotional state"
         
+        # Apply personality influence to baseline emotions
+        self.apply_personality_baseline()
+        
         # Update the primary emotion
         self.update_primary_emotion()
         
         self.get_logger().info("ALAINA: Emotional state initialized")
+    
+    def apply_personality_baseline(self):
+        """Apply personality baseline influences to the emotional state."""
+        # Get personality-influenced baseline values
+        baseline_emotions = self.personality_model.get_baseline_emotions()
+        
+        # Apply baseline adjustments for emotions
+        for emotion, baseline in baseline_emotions.items():
+            if emotion in self.emotion_model.get_all_emotions() or emotion in self.emotion_model.get_dimensions():
+                current = self.emotion_model.get_emotion_value(self.emotional_state, emotion)
+                # Only apply if the current value is close to neutral
+                if abs(current) < 0.15:
+                    self.emotion_model.set_emotion_value(self.emotional_state, emotion, baseline)
+        
+        self.get_logger().debug("ALAINA: Applied personality baseline to emotional state")
+    
+    def apply_personality_influence(self):
+        """Apply personality influence to the current emotional state."""
+        # Apply personality influence to the emotional state
+        influenced_state = self.personality_model.influence_emotional_state(self.emotional_state)
+        
+        # Check if there are active goals that should influence the state
+        goals = self.manager_config.get('active_goals', {})
+        if goals:
+            # Apply goal adjustments based on personality
+            influenced_state = self.personality_model.adjust_for_goals(influenced_state, goals)
+            self.get_logger().debug(f"ALAINA: Applied goal adjustments with {len(goals)} active goals")
+        
+        # Update the emotional state
+        self.emotional_state = influenced_state
+        
+        # Update timestamp
+        self.emotional_state.timestamp = utils.get_current_time()
+        
+        # Update primary emotion
+        self.update_primary_emotion()
+        
+        # Add personality info to metadata
+        metadata = {}
+        try:
+            if self.emotional_state.description and "{" in self.emotional_state.description:
+                # Extract existing metadata if it's embedded in the description
+                start = self.emotional_state.description.find("{")
+                end = self.emotional_state.description.rfind("}") + 1
+                if start > 0 and end > start:
+                    metadata_str = self.emotional_state.description[start:end]
+                    try:
+                        metadata = json.loads(metadata_str)
+                        # Remove the metadata from the description
+                        self.emotional_state.description = self.emotional_state.description[:start].strip()
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as e:
+            self.get_logger().warn(f"ALAINA: Error extracting metadata: {e}")
+        
+        # Add personality information to metadata
+        metadata['personality_traits'] = {
+            k: v for k, v in self.personality_model.get_all_traits().items() 
+            if k in ['openness', 'conscientiousness', 'extraversion', 'agreeableness', 'neuroticism']
+        }
+        
+        # Add primary trait influence
+        primary_trait = max(
+            metadata['personality_traits'].items(), 
+            key=lambda x: abs(x[1] - 0.5)
+        )[0]
+        metadata['primary_trait'] = primary_trait
+        
+        # Embed the metadata in the description
+        if not self.emotional_state.description.endswith("."):
+            self.emotional_state.description += "."
+        
+        self.emotional_state.description += f" Influenced by {primary_trait}."
+        
+        # Publish updated state
+        self.state_publisher.publish(self.emotional_state)
+        
+        self.get_logger().debug("ALAINA: Applied personality influence to emotional state")
     
     def update_emotional_state(self):
         """Update the emotional state based on decay rates and publish the current state."""
@@ -136,8 +234,8 @@ class EmotionalStateManager(Node):
         time_diff = (current_time - self.last_update_time).nanoseconds / 1e9
         self.last_update_time = current_time
         
-        # Apply decay to emotional dimensions
-        decay_rates = self.manager_config.get('decay_rates', {})
+        # Get personality-influenced decay rates
+        decay_rates = self.personality_model.get_emotional_decay_rates()
         
         # Use the emotion model to update the state
         self.emotion_model.update_state(self.emotional_state, time_diff, decay_rates)
@@ -179,6 +277,9 @@ class EmotionalStateManager(Node):
         
         # Update the source of the emotional state
         self.emotional_state.source = f"sensory_input:{msg.input_type}"
+        
+        # Trigger personality influence after receiving input
+        self.apply_personality_influence()
     
     def rumination_update_callback(self, msg):
         """Process rumination updates."""
@@ -230,6 +331,9 @@ class EmotionalStateManager(Node):
         # Update timestamp
         self.emotional_state.timestamp = utils.get_current_time()
         
+        # Apply personality influence to the rumination response
+        self.apply_personality_influence()
+        
         # Update primary emotion
         self.update_primary_emotion()
         
@@ -269,8 +373,23 @@ class EmotionalStateManager(Node):
             temp_state.source = self.emotional_state.source
             temp_state.primary_emotion = ""  # Will be updated based on remaining values
             
-            # Set only the requested emotion
-            if specific in ['pleasure', 'arousal', 'dominance', 
+            # Check if specific is a personality trait
+            if specific.startswith("personality."):
+                trait_name = specific.split('.')[1]
+                trait_value = self.personality_model.get_trait_value(trait_name)
+                
+                if trait_value is not None:
+                    # Return information about the personality trait
+                    temp_state.description = f"{trait_name.capitalize()}: {trait_value:.2f}"
+                    temp_state.intensity = trait_value
+                    temp_state.primary_emotion = trait_name
+                    response.emotional_state = temp_state
+                else:
+                    response.success = False
+                    response.error_message = f"Unknown personality trait: {trait_name}"
+            
+            # Standard emotion query
+            elif specific in ['pleasure', 'arousal', 'dominance', 
                            'happiness', 'sadness', 'anger', 
                            'fear', 'disgust', 'surprise']:
                 # Copy the specific emotion value
@@ -281,8 +400,15 @@ class EmotionalStateManager(Node):
                 response.success = False
                 response.error_message = f"Unknown emotion: {specific}"
         
-        # Clear description if not requested
-        if not request.include_description:
+        # Add personality information to the response if requested
+        if request.include_description:
+            # Add personality context to the description
+            personality_info = f"Personality: {self.personality_model.format_personality_traits()}"
+            if response.emotional_state.description:
+                response.emotional_state.description += f" {personality_info}"
+            else:
+                response.emotional_state.description = personality_info
+        else:
             response.emotional_state.description = ""
         
         return response
@@ -302,22 +428,44 @@ class EmotionalStateManager(Node):
         source = f"{request.modification_type}_modification"
         
         try:
-            # Use the emotion model to modify the state
-            self.emotional_state = self.emotion_model.modify_state(
-                self.emotional_state,
-                request.modification_type,
-                request.value,
-                request.specific_emotion
-            )
-            
-            # Update source and description after modification
-            self.emotional_state.source = source
-            
-            if request.modification_type == "specific":
-                self.emotional_state.description = f"Modified {request.specific_emotion} due to: {reason}"
-            else:
-                self.emotional_state.description = f"Modified emotional state due to: {reason}"
+            # Check if this is a personality trait modification
+            if request.modification_type == "personality_trait":
+                # Modify a personality trait
+                if not request.specific_emotion:
+                    raise ValueError("Personality trait modification requires a specific trait name")
                 
+                # Set the trait value
+                success = self.personality_model.set_trait_value(
+                    request.specific_emotion,
+                    request.value
+                )
+                
+                if not success:
+                    raise ValueError(f"Failed to set personality trait: {request.specific_emotion}")
+                
+                # Apply personality influence after trait change
+                self.apply_personality_influence()
+                
+                # Update description
+                self.emotional_state.description = f"Personality trait {request.specific_emotion} modified due to: {reason}"
+                self.emotional_state.source = "personality_modification"
+            else:
+                # Use the emotion model to modify the emotional state
+                self.emotional_state = self.emotion_model.modify_state(
+                    self.emotional_state,
+                    request.modification_type,
+                    request.value,
+                    request.specific_emotion
+                )
+                
+                # Update source and description after modification
+                self.emotional_state.source = source
+                
+                if request.modification_type == "specific":
+                    self.emotional_state.description = f"Modified {request.specific_emotion} due to: {reason}"
+                else:
+                    self.emotional_state.description = f"Modified emotional state due to: {reason}"
+            
             # Update timestamp
             self.emotional_state.timestamp = utils.get_current_time()
             
@@ -347,7 +495,8 @@ class EmotionalStateManager(Node):
             emotion_values = ", ".join([f"{e}: {self.emotion_model.get_emotion_value(self.emotional_state, e):.2f}" for e in emotions])
             self.get_logger().info(f"ALAINA: Emotion values - {emotion_values}")
             self.get_logger().info(f"ALAINA: Primary emotion updated to: {primary_emotion}")
-            
+        
+        # Set the primary emotion
         self.emotional_state.primary_emotion = primary_emotion
 
 def main(args=None):

@@ -1,103 +1,178 @@
-# Configuration for the ROS Emotion System
+#####################
+# ROS Emotion Config #
+#####################
 
+# Emotional State Manager Configuration
 emotional_state_manager:
-  # Default initial emotional state
+  # How frequently to update the emotional state (Hz)
+  update_frequency: 10.0
+  
+  # How frequently to apply personality influences (Hz)
+  personality_update_frequency: 1.0
+  
+  # Model types
+  emotion_model_type: "pad_basic"
+  personality_model_type: "hybrid"
+  
+  # Initial emotional state
   initial_state:
     pleasure: 0.0
     arousal: 0.0
     dominance: 0.0
-    happiness: 0.0
-    sadness: 0.0
+    happiness: 0.1
+    sadness: 0.1
     anger: 0.0
     fear: 0.0
     disgust: 0.0
     surprise: 0.0
-    intensity: 0.0
+    intensity: 0.1
     confidence: 1.0
+    description: "Initial neutral emotional state"
   
   # Decay rates for emotions (per second)
   decay_rates:
-    pleasure: 0.01
-    arousal: 0.02
-    dominance: 0.005
-    happiness: 0.02
-    sadness: 0.01
-    anger: 0.03
-    fear: 0.02
-    disgust: 0.01
-    surprise: 0.05
+    pleasure: 0.05
+    arousal: 0.05
+    dominance: 0.03
+    happiness: 0.03
+    sadness: 0.02
+    anger: 0.07
+    fear: 0.05
+    disgust: 0.04
+    surprise: 0.09
   
-  # Minimum threshold for emotions to be considered active
-  threshold: 0.05
+  # Active goals and their importance (0.0 to 1.0)
+  active_goals:
+    safety: 0.7
+    social: 0.6
+    achievement: 0.7
+    exploration: 0.5
+    stability: 0.6
   
-  # Maximum rate of change for emotional dimensions
-  max_rate_of_change: 0.2
-  
-  # Update frequency in Hz
-  update_frequency: 10.0
+  # Personality configuration
+  personality:
+    # Five Factor Model traits (0.0 to 1.0)
+    traits:
+      openness: 0.7        # High openness to experience
+      conscientiousness: 0.6
+      extraversion: 0.7    # Moderately extraverted
+      agreeableness: 0.8   # Highly agreeable
+      neuroticism: 0.3     # Low neuroticism (emotionally stable)
+      
+      # Secondary traits
+      risk_tolerance: 0.5
+      adaptability: 0.7
+      creativity: 0.8
+      resilience: 0.7
+    
+    # Trait influences on emotions
+    trait_emotion_influence:
+      neuroticism:
+        happiness: -0.5   # Higher neuroticism reduces happiness
+        fear: 0.5         # Higher neuroticism increases fear
+      
+    # Trait influences on emotional decay
+    trait_decay_influence:
+      extraversion:
+        sadness: 0.4      # Higher extraversion makes sadness decay faster
 
-sensory_input_processor:
-  # Default priority for different input types
-  default_priorities:
-    visual: 0.7
-    auditory: 0.8
-    text: 0.5
-    touch: 0.9
-    combined: 0.8
-  
-  # Input buffer size
-  buffer_size: 10
-  
-  # Update frequency in Hz
-  update_frequency: 5.0
-
+# LLM Integration Configuration
 llm_integration:
-  # LLM service endpoint
-  endpoint: "http://localhost:8000/v1/chat/completions"
-  
-  # API key (if needed)
-  api_key: ""
-  
-  # Model to use
+  # LLM API configuration
+  api_url: "http://localhost:8000/api/chat"
   model: "gpt-3.5-turbo"
-  
-  # Maximum tokens for response
-  max_tokens: 150
-  
-  # Temperature for generation
+  max_tokens: 1024
   temperature: 0.7
   
-  # System prompt template
-  system_prompt: "You are an emotion processing system for a robot. Given the current emotional state and a sensory input, determine how the robot's emotional state should change."
+  # How frequently to process inputs (Hz)
+  process_frequency: 1.0
   
-  # Request timeout in seconds
-  timeout: 5.0
+  # Model types (must match emotional state manager)
+  emotion_model_type: "pad_basic"
+  personality_model_type: "hybrid"
   
-  # Update frequency in Hz
-  update_frequency: 1.0
+  # Personality configuration (should match emotional state manager)
+  personality:
+    traits:
+      openness: 0.7
+      conscientiousness: 0.6
+      extraversion: 0.7
+      agreeableness: 0.8
+      neuroticism: 0.3
 
+# Rumination Engine Configuration
 rumination_engine:
-  # Maximum number of active ruminations
+  # Maximum number of concurrent active ruminations
   max_active_ruminations: 3
   
-  # Rumination stages
-  stages: 5
+  # Probability of starting a new rumination when eligible
+  rumination_probability: 0.3
   
-  # Time between rumination updates (seconds)
-  update_interval: 5.0
+  # How recency affects rumination probability
+  recency_factor: 0.5
   
-  # Probability of continuing rumination at each stage
-  continuation_probability: 0.8
+  # Minimum emotional intensity to trigger rumination
+  intensity_threshold: 0.5
   
-  # Decay rate for rumination intensity
-  intensity_decay: 0.1
+  # Maximum number of stages in rumination
+  max_rumination_stages: 4
   
-  # Update frequency in Hz
-  update_frequency: 0.2
+  # How quickly rumination intensity decays
+  rumination_decay_factor: 0.8
+  
+  # How often to check for new ruminations (seconds)
+  rumination_check_interval: 15.0
+  
+  # LLM API configuration (same as llm_integration)
+  api_url: "http://localhost:8000/api/chat"
+  model: "gpt-3.5-turbo"
+  max_tokens: 1024
+  temperature: 0.7
+  
+  # Model types (must match emotional state manager)
+  emotion_model_type: "pad_basic"
+  personality_model_type: "hybrid"
+  
+  # Personality configuration (should match emotional state manager)
+  personality:
+    traits:
+      openness: 0.7
+      conscientiousness: 0.6
+      extraversion: 0.7
+      agreeableness: 0.8
+      neuroticism: 0.3
 
-visualization:
-  # Update frequency in Hz
-  update_frequency: 10.0
+# Sensory Input Processor Configuration
+sensory_input_processor:
+  # Default values for various sensory input types
+  defaults:
+    text:
+      intensity: 0.7
+      priority: 0.6
+    visual:
+      intensity: 0.8
+      priority: 0.7
+    auditory:
+      intensity: 0.6
+      priority: 0.5
+    touch:
+      intensity: 0.9
+      priority: 0.8
+
+# Visualization Node Configuration
+visualization_node:
+  # Update frequency (Hz)
+  update_frequency: 5.0
   
-  # History length for time series visualization
-  history_length: 100 
+  # Maximum history entries to display
+  max_history: 10
+  
+  # Scale factors for visualization
+  scale_factors:
+    pad_sphere: 0.2
+    emotion_bars: 0.05
+    history: 0.1
+    
+  # Model types (must match emotional state manager)
+  emotion_model_type: "pad_basic"
+  personality_model_type: "hybrid" 

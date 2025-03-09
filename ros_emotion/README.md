@@ -1,281 +1,207 @@
-# ROS Emotion Package
+# ROS Emotion System
 
-A ROS 2 package for robot emotion processing, providing a comprehensive system for maintaining and updating emotional states based on sensory inputs.
+This package provides a comprehensive emotional processing system for robots using ROS 2. It incorporates emotional state management, sensory input processing, rumination, and integration with language models (LLMs) to create a sophisticated emotional architecture.
 
-## Overview
+## Features
 
-The `ros_emotion` package implements a robot emotion processing system with the following components:
+- **Emotional State Management**: Manages emotional state using a PAD (Pleasure, Arousal, Dominance) dimensional model combined with basic emotions.
+- **Personality Modeling**: Incorporates personality traits that influence emotional responses and processing.
+- **Sensory Input Processing**: Processes various types of sensory inputs (visual, auditory, text, touch).
+- **Rumination Engine**: Simulates internal thought processes that continue to influence emotional state.
+- **LLM Integration**: Uses language models to generate emotional responses to inputs.
+- **Visualization**: Provides visual representation of the emotional state.
 
-1. **Emotional State Manager**: Maintains and updates the robot's emotional state
-2. **Sensory Input Processor**: Processes different types of sensory inputs
-3. **LLM Integration**: Integrates with a Large Language Model to process natural language descriptions
-4. **Rumination Engine**: Allows for gradual processing of emotional responses
-5. **Visualization Node**: Provides visualization tools for monitoring emotional states
+## Architecture
 
-## Emotional Model
+The system consists of several interconnected nodes:
 
-The package uses a hybrid emotional model combining:
+1. **Emotional State Manager**: Maintains the current emotional state, applies decay over time, and handles requests to modify the state.
+2. **Sensory Input Processor**: Processes incoming sensory data and forwards it for emotional processing.
+3. **LLM Integration**: Interfaces with language models to determine emotional responses to inputs.
+4. **Rumination Engine**: Simulates continued internal processing of experiences, generating ongoing emotional responses.
+5. **Visualization Node**: Provides visual representations of the emotional state.
+6. **Node Lifecycle Manager**: Controls the lifecycle of all nodes in the system.
 
-- **Dimensional Model (PAD)**: Pleasure, Arousal, Dominance
-- **Basic Emotions**: Happiness, Sadness, Anger, Fear, Disgust, Surprise
+## Personality Model
 
-## Emotion Model Architecture
+The system now includes a sophisticated personality model that influences how emotions are processed, expressed, and decay over time.
 
-The system uses an abstract `EmotionModel` class as the core interface for all emotion-related operations. This design provides:
+### Key Components
 
-- **Abstraction**: Separates the implementation details from how emotional states are used
-- **Extensibility**: New emotion models can be implemented by extending the base class
-- **Consistency**: Ensures all components interact with emotions in a standardized way
+#### PersonalityModel Abstract Class
 
-### EmotionModel Interface
+The `PersonalityModel` abstract class defines the interface for personality models:
 
-The `EmotionModel` class provides the following key methods:
+- **Trait Management**: Methods to initialize, get, and set personality traits.
+- **Emotional Influence**: Methods to modulate emotional responses and influence emotional states.
+- **Goal-Oriented Behavior**: Methods to adjust emotional states based on current goals.
+- **Configuration**: Methods to provide baselines and decay rates influenced by personality.
 
-- **create_emotional_state()**: Creates a new emotional state with default values
-- **get_primary_emotion()**: Determines the primary emotion from the current state
-- **update_state()**: Updates the state based on decay rates over time
-- **modify_state()**: Modifies the state based on various modification types
-- **get_all_emotions()**: Returns a list of all supported emotions
-- **get_dimensions()**: Returns a list of all emotional dimensions (e.g., PAD)
-- **get_emotion_value()**: Gets the value of a specific emotion
-- **set_emotion_value()**: Sets the value of a specific emotion
-- **calculate_intensity()**: Calculates the overall intensity of the state
-- **get_emotion_color()**: Gets a color representing a specific emotion
-- **format_emotional_state()**: Formats the emotional state for display/prompts
-- **get_emotional_state_color()**: Gets a color representing the full emotional state
+#### HybridPersonalityModel Implementation
 
-### Built-in Emotion Models
+The `HybridPersonalityModel` is a concrete implementation that combines:
 
-#### PADBasicEmotionModel
+- **Five-Factor Model (OCEAN)**:
+  - **Openness**: Influences curiosity, creativity, and receptiveness to new experiences.
+  - **Conscientiousness**: Affects orderliness, responsibility, and goal-directed behavior.
+  - **Extraversion**: Impacts social engagement, positive emotions, and activity levels.
+  - **Agreeableness**: Influences cooperation, empathy, and conflict avoidance.
+  - **Neuroticism**: Affects emotional stability, anxiety, and reactivity to stimuli.
 
-The default implementation uses the `PADBasicEmotionModel` which combines:
+- **Goal-Oriented Behavior**:
+  - Adjusts emotional responses based on current goals (safety, social, achievement, etc.).
+  - Personality traits modulate the importance and influence of different goals.
 
-- **PAD Dimensional Model**: Pleasure (-1.0 to 1.0), Arousal (-1.0 to 1.0), Dominance (-1.0 to 1.0)
-- **Basic Emotions**: Happiness, Sadness, Anger, Fear, Disgust, Surprise (0.0 to 1.0)
+- **Emotional Processing**:
+  - Influences baseline emotional states (e.g., higher neuroticism = higher baseline anxiety).
+  - Modulates the intensity of emotional responses.
+  - Affects decay rates of different emotions (e.g., extraverts' negative emotions decay faster).
 
-The model handles:
-- Determining primary emotions based on the highest basic emotion value
-- Calculating intensity based on both PAD dimensions and basic emotions
-- Mapping emotions to colors for visualization
-- Managing the relationship between dimensional and categorical emotion representations
+### Integration Points
 
-### Creating Custom Emotion Models
+The personality model is integrated with multiple components:
 
-To create a custom emotion model:
+1. **Emotional State Manager**: Applies personality influences to emotional states and incorporates goals.
+2. **LLM Integration**: Includes personality context in prompts for more accurate emotional responses.
+3. **Rumination Engine**: Adjusts rumination intensity and continuation based on personality traits.
 
-1. Create a new class that extends `EmotionModel`
-2. Implement all the required abstract methods
-3. Register your model in the `create_emotion_model()` factory function
-4. Update the configuration to use your custom model
+### Customization
 
-Example configuration in `emotion_config.yaml`:
+The personality model can be customized through configuration:
+
 ```yaml
-emotional_state_manager:
-  emotion_model: "your_custom_model"
+personality:
+  traits:
+    openness: 0.7        # Higher openness to experience
+    conscientiousness: 0.6
+    extraversion: 0.8    # More extraverted
+    agreeableness: 0.5
+    neuroticism: 0.3     # More emotionally stable
+    risk_tolerance: 0.6  # Custom trait
+    
+  goals:
+    safety: 0.5
+    social: 0.8          # Strong focus on social interaction
+    achievement: 0.7
+    exploration: 0.6
+    stability: 0.4
 ```
 
 ## Installation
 
 ### Prerequisites
 
-- ROS 2 Foxy or newer
-- Python 3.8 or newer
-- Required Python packages: `numpy`, `requests`, `pyyaml`
+- ROS 2 Foxy
+- Python 3.8+
+- Docker (optional)
 
 ### Building from Source
 
-```bash
-# Create a ROS workspace (if you don't have one)
-mkdir -p ~/ros2_ws/src
-cd ~/ros2_ws/src
+1. Clone the repository into your ROS 2 workspace's `src` directory:
+   ```
+   cd ~/ros2_ws/src
+   git clone https://github.com/yourusername/ros_emotion.git
+   ```
 
-# Clone the repository
-git clone https://github.com/yourusername/ros_emotion.git
+2. Install dependencies:
+   ```
+   cd ~/ros2_ws
+   rosdep install --from-paths src --ignore-src -r -y
+   ```
 
-# Install dependencies
-cd ~/ros2_ws
-rosdep install --from-paths src --ignore-src -r -y
+3. Build the package:
+   ```
+   colcon build --symlink-install --packages-select ros_emotion
+   ```
 
-# Build the package
-colcon build --packages-select ros_emotion
+4. Source the workspace:
+   ```
+   source ~/ros2_ws/install/setup.bash
+   ```
 
-# Source the workspace
-source ~/ros2_ws/install/setup.bash
-```
+### Docker Setup
 
-### Docker Deployment
+Alternatively, use the provided Docker setup:
 
-This package includes Docker support for easy deployment and testing:
+1. Build the Docker images:
+   ```
+   ./cleanup_and_rebuild.sh
+   ```
 
-```bash
-# Build and start all containers
-./cleanup_and_rebuild.sh
-
-# Start containers if already built
-./start_all.sh
-
-# Stop all containers
-docker-compose down
-```
-
-The Docker deployment includes:
-- Main ROS container with all nodes
-- Test container for running tests
-- Web interface container for visualization
+2. Start the containers:
+   ```
+   ./start_all.sh
+   ```
 
 ## Usage
 
-### Running the Emotion System
+### Starting the System
 
-To run the entire system:
+Start the complete emotion system with personality model:
 
-```bash
-# Using scripts (recommended)
-./start_all.sh
-
-# Or manually
-docker-compose up
+```
+ros2 launch ros_emotion emotion_system_with_personality.launch.py
 ```
 
-For development and testing:
+You can customize the personality model type:
 
-```bash
-# Rebuild and restart all containers
-./cleanup_and_rebuild.sh
+```
+ros2 launch ros_emotion emotion_system_with_personality.launch.py personality_type:=hybrid
 ```
 
-### Publishing Sensory Inputs
+### Sending Test Inputs
 
-You can publish sensory inputs to the system using the following topics:
+The system includes a test input publisher that can be used to send various types of inputs:
 
-- **Text Input**: `text_input` (std_msgs/String)
-- **Visual Input**: `visual_input` (std_msgs/String)
-- **Auditory Input**: `auditory_input` (std_msgs/String)
-- **Touch Input**: `touch_input` (std_msgs/String)
-
-Example:
-
-```bash
-# Publish a text input
-ros2 topic pub /text_input std_msgs/msg/String "data: '{\"description\": \"The robot receives a compliment\", \"intensity\": 0.8}'"
-
-# Using Docker
-docker exec -it ros_emotion_container bash -c "source /opt/ros/foxy/setup.bash && source /ros_ws/install/setup.bash && ros2 topic pub --once /sensory_input ros_emotion/msg/SensoryInput '{input_type: \"visual\", description: \"I see a cute puppy playing\", source: \"visual_sensor\", intensity: 0.8}'"
+```
+ros2 run ros_emotion test_input_publisher.py
 ```
 
 ### Querying Emotional State
 
-You can query the current emotional state using the `query_emotional_state` service:
+Query the current emotional state:
 
-```bash
-# Query the full emotional state
-ros2 service call /query_emotional_state ros_emotion/srv/EmotionQuery "{query_type: 'full', include_description: true}"
-
-# Query only the dimensional model
-ros2 service call /query_emotional_state ros_emotion/srv/EmotionQuery "{query_type: 'dimensional', include_description: false}"
-
-# Query only the categorical emotions
-ros2 service call /query_emotional_state ros_emotion/srv/EmotionQuery "{query_type: 'categorical', include_description: false}"
-
-# Query a specific emotion
-ros2 service call /query_emotional_state ros_emotion/srv/EmotionQuery "{query_type: 'specific', specific_emotion: 'happiness', include_description: false}"
+```
+ros2 service call /query_emotional_state ros_emotion/srv/EmotionQuery "query_type: 'full' specific_emotion: '' include_description: true"
 ```
 
-### Modifying Emotional State
+### Modifying Personality Traits
 
-You can modify the emotional state using the `modify_emotional_state` service:
+Modify personality traits through the emotion modify service:
 
-```bash
-# Reset the emotional state
-ros2 service call /modify_emotional_state ros_emotion/srv/EmotionModify "{modification_type: 'reset', reason: 'Testing', override_safety: false}"
-
-# Set all emotions to a specific value
-ros2 service call /modify_emotional_state ros_emotion/srv/EmotionModify "{modification_type: 'absolute', value: 0.5, reason: 'Testing', override_safety: false}"
-
-# Adjust all emotions by a relative amount
-ros2 service call /modify_emotional_state ros_emotion/srv/EmotionModify "{modification_type: 'relative', value: 0.2, reason: 'Testing', override_safety: false}"
-
-# Modify a specific emotion
-ros2 service call /modify_emotional_state ros_emotion/srv/EmotionModify "{modification_type: 'specific', specific_emotion: 'happiness', value: 0.8, reason: 'Testing', override_safety: false}"
 ```
-
-### Monitoring Emotional State
-
-You can monitor the emotional state by echoing the `/emotional_state` topic:
-
-```bash
-# Using Docker
-docker exec -it ros_emotion_container bash -c "source /opt/ros/foxy/setup.bash && source /ros_ws/install/setup.bash && ros2 topic echo /emotional_state"
+ros2 service call /modify_emotional_state ros_emotion/srv/EmotionModify "modification_type: 'personality_trait' specific_emotion: 'neuroticism' value: 0.8 reason: 'Testing personality influence' override_safety: false"
 ```
 
 ## Configuration
 
-The package can be configured using the YAML file in the `config` directory:
+The system can be configured using the `emotion_config.yaml` file:
 
-- `emotion_config.yaml`: Contains configuration for all components of the emotion system, including:
-  - Emotion model type and parameters
-  - Default decay rates for emotions
-  - Rumination parameters
-  - Visualization settings
-
-## Visualization
-
-The visualization node publishes visualization markers to the `emotion_visualization` topic, which can be viewed in RViz.
-
-To view the visualization:
-
-1. Launch RViz: `ros2 run rviz2 rviz2`
-2. Add a MarkerArray display
-3. Set the topic to `/emotion_visualization`
-4. Set the fixed frame to `emotion_frame`
-
-## Development
-
-### System Architecture
-
-The system uses a modular architecture with the following key components:
-
-1. **EmotionModel**: Core abstraction for emotion processing
-2. **EmotionalStateManager**: Maintains and updates the emotional state
-3. **LLMIntegration**: Interfaces with LLMs to process inputs
-4. **RuminationEngine**: Processes emotional inputs over time
-5. **VisualizationNode**: Provides visualization of the emotional state
-
-### Adding New Features
-
-#### Extending the Emotion Model
-
-To extend with a new emotion model:
-
-1. Create a new class that extends `EmotionModel` in `emotion_model.py`
-2. Implement all required abstract methods
-3. Register your model in the `create_emotion_model()` factory function
-4. Update config to use your new model
-
-#### Adding New Sensory Input Types
-
-To add new input types:
-
-1. Add a new callback method in `sensory_input_processor.py`
-2. Register the new subscriber in the constructor
-3. Update the `process_input()` method to handle the new input type
-
-#### Customizing Visualization
-
-To customize the visualization:
-
-1. Modify the marker creation methods in `visualization_node.py`
-2. Update the `get_emotional_state_color()` method in your emotion model
-
-### Testing
-
-The package includes a test input publisher for testing the system:
-
-```bash
-# Start the test input publisher
-docker exec -it ros_emotion_container bash -c "source /opt/ros/foxy/setup.bash && source /ros_ws/install/setup.bash && ros2 run ros_emotion test_input_publisher.py"
+```yaml
+emotional_state_manager:
+  update_frequency: 10.0
+  emotion_model_type: "pad_basic"
+  personality_model_type: "hybrid"
+  personality:
+    traits:
+      openness: 0.6
+      conscientiousness: 0.5
+      extraversion: 0.7
+      agreeableness: 0.6
+      neuroticism: 0.4
+    goals:
+      safety: 0.7
+      social: 0.6
+      achievement: 0.8
+      exploration: 0.5
+      stability: 0.6
 ```
 
 ## License
 
-This package is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- The Five-Factor Model (OCEAN) implementation is based on psychological research by Costa and McCrae.
+- The PAD emotional model is based on the work of Mehrabian and Russell. 
