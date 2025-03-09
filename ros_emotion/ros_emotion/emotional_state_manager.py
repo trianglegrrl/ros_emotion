@@ -8,6 +8,8 @@ from ros_emotion.srv import EmotionQuery, EmotionModify
 import numpy as np
 import uuid
 import ros_emotion.utils as utils
+# Import our emotion model
+from ros_emotion.emotion_model import create_emotion_model, EmotionModel, PADBasicEmotionModel
 
 class EmotionalStateManager(Node):
     def __init__(self):
@@ -18,6 +20,11 @@ class EmotionalStateManager(Node):
         
         # Create the emotional state object
         self.emotional_state = EmotionalState()
+        
+        # Initialize the emotion model
+        emotion_model_type = self.manager_config.get('emotion_model_type', 'pad_basic')
+        self.emotion_model = create_emotion_model(emotion_model_type)
+        
         self.initialize_emotional_state()
         
         # Initialize tracking variables
@@ -428,8 +435,13 @@ class EmotionalStateManager(Node):
         return response
 
     def update_primary_emotion(self):
-        """Update the primary_emotion field based on the highest emotional value."""
-        emotions = {
+        """Update the primary_emotion field based on the current emotion model."""
+        # Use the emotion model to determine the primary emotion
+        primary_emotion = self.emotion_model.get_primary_emotion(self.emotional_state)
+        
+        # If all emotions are below threshold, set to neutral
+        threshold = self.manager_config.get('threshold', 0.05)
+        basic_emotions = {
             "happiness": self.emotional_state.happiness,
             "sadness": self.emotional_state.sadness,
             "anger": self.emotional_state.anger,
@@ -437,17 +449,12 @@ class EmotionalStateManager(Node):
             "disgust": self.emotional_state.disgust,
             "surprise": self.emotional_state.surprise
         }
-        
-        # Find the emotion with the highest value
-        primary_emotion = max(emotions.items(), key=lambda x: x[1])[0]
-        
-        # If all emotions are below threshold, set to neutral
-        threshold = self.manager_config.get('threshold', 0.05)
-        if emotions[primary_emotion] < threshold:
+        max_emotion_value = max(basic_emotions.values())
+        if max_emotion_value < threshold:
             primary_emotion = "neutral"
         
         # Log the values for debugging
-        self.get_logger().info(f"ALAINA: Emotion values - happiness: {emotions['happiness']:.2f}, sadness: {emotions['sadness']:.2f}, anger: {emotions['anger']:.2f}, fear: {emotions['fear']:.2f}")
+        self.get_logger().info(f"ALAINA: Emotion values - happiness: {basic_emotions['happiness']:.2f}, sadness: {basic_emotions['sadness']:.2f}, anger: {basic_emotions['anger']:.2f}, fear: {basic_emotions['fear']:.2f}")
         
         self.emotional_state.primary_emotion = primary_emotion
         self.get_logger().info(f"ALAINA: Primary emotion updated to: {primary_emotion}")

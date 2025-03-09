@@ -7,7 +7,7 @@ package_name = 'ros_emotion'
 setup(
     name=package_name,
     version='0.0.1',
-    packages=[package_name],
+    packages=[package_name, f'{package_name}.{package_name}', f'{package_name}.test'],
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -31,6 +31,7 @@ setup(
             'rumination_engine = ros_emotion.rumination_engine:main',
             'visualization_node = ros_emotion.visualization_node:main',
             'test_input_publisher = ros_emotion.test_input_publisher:main',
+            'node_lifecycle_manager = ros_emotion.node_lifecycle_manager:main',
         ],
     },
 ) 
