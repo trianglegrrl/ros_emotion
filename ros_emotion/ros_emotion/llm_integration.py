@@ -385,30 +385,7 @@ Respond ONLY with a valid JSON object in the following format:
     
     def format_emotional_state(self, state):
         """Format the emotional state for the LLM prompt."""
-        # Get dimensions and basic emotions from the emotion model
-        dimensions = self.emotion_model.get_dimensions()
-        emotions = self.emotion_model.get_all_emotions()
-        
-        # Format dimensions section
-        dimensions_text = "Dimensional Model:\n"
-        for dim in dimensions:
-            value = self.emotion_model.get_emotion_value(state, dim)
-            dimensions_text += f"- {dim.capitalize()}: {value:.2f} (-1.0 to 1.0)\n"
-        
-        # Format basic emotions section
-        emotions_text = "\nBasic Emotions:\n"
-        for emotion in emotions:
-            value = self.emotion_model.get_emotion_value(state, emotion)
-            emotions_text += f"- {emotion.capitalize()}: {value:.2f} (0.0 to 1.0)\n"
-        
-        # Calculate intensity using the emotion model
-        intensity = self.emotion_model.calculate_intensity(state)
-        
-        return f"""
-{dimensions_text}
-{emotions_text}
-Overall Intensity: {intensity:.2f}
-"""
+        return self.emotion_model.format_emotional_state(state)
     
     def generate_rumination_update(self, sensory_input, llm_response):
         """Generate a rumination update from the LLM response."""

@@ -384,23 +384,16 @@ class VisualizationNode(Node):
         """Get a color representing the current emotional state."""
         color = ColorRGBA()
         
-        # Get values from the emotion model
-        pleasure = self.emotion_model.get_emotion_value(self.current_emotional_state, "pleasure")
-        arousal = self.emotion_model.get_emotion_value(self.current_emotional_state, "arousal")  
-        dominance = self.emotion_model.get_emotion_value(self.current_emotional_state, "dominance")
-        intensity = self.emotion_model.calculate_intensity(self.current_emotional_state)
+        # Get the color from the emotion model
+        model_color = self.emotion_model.get_emotional_state_color(self.current_emotional_state)
         
-        # Red component based on pleasure (negative = more red)
-        color.r = 0.5 - pleasure * 0.5
-        
-        # Green component based on arousal (positive = more green)
-        color.g = 0.5 + arousal * 0.5
-        
-        # Blue component based on dominance (positive = more blue)
-        color.b = 0.5 + dominance * 0.5
+        # Set RGB values
+        color.r = model_color[0]
+        color.g = model_color[1]
+        color.b = model_color[2]
         
         # Alpha based on intensity
-        color.a = 0.5 + intensity * 0.5
+        color.a = 0.5 + self.emotion_model.calculate_intensity(self.current_emotional_state) * 0.5
         
         return color
     

@@ -66,6 +66,16 @@ class EmotionModel(ABC):
     def get_dimensions(self):
         """Return a list of emotional dimensions (e.g., PAD)"""
         pass
+    
+    @abstractmethod
+    def format_emotional_state(self, emotional_state):
+        """Format the emotional state for display or prompts."""
+        pass
+    
+    @abstractmethod
+    def get_emotional_state_color(self, emotional_state):
+        """Get a color representing the full emotional state."""
+        pass
 
 
 class PADBasicEmotionModel(EmotionModel):
@@ -291,6 +301,53 @@ class PADBasicEmotionModel(EmotionModel):
     def get_dimensions(self):
         """Return a list of emotional dimensions (e.g., PAD)"""
         return self._dimensions
+    
+    def format_emotional_state(self, emotional_state):
+        """Format the emotional state for display or prompts."""
+        # Format dimensions section
+        dimensions_text = "Dimensional Model:\n"
+        for dim in self._dimensions:
+            value = self.get_emotion_value(emotional_state, dim)
+            dimensions_text += f"- {dim.capitalize()}: {value:.2f} (-1.0 to 1.0)\n"
+        
+        # Format basic emotions section
+        emotions_text = "\nBasic Emotions:\n"
+        for emotion in self._basic_emotions:
+            value = self.get_emotion_value(emotional_state, emotion)
+            emotions_text += f"- {emotion.capitalize()}: {value:.2f} (0.0 to 1.0)\n"
+        
+        # Calculate intensity
+        intensity = self.calculate_intensity(emotional_state)
+        
+        return f"""
+{dimensions_text}
+{emotions_text}
+Overall Intensity: {intensity:.2f}
+Primary Emotion: {emotional_state.primary_emotion}
+Description: {emotional_state.description}
+"""
+    
+    def get_emotional_state_color(self, emotional_state):
+        """Get a color representing the full emotional state."""
+        # Get values from the emotion state
+        pleasure = self.get_emotion_value(emotional_state, "pleasure")
+        arousal = self.get_emotion_value(emotional_state, "arousal")  
+        dominance = self.get_emotion_value(emotional_state, "dominance")
+        intensity = self.calculate_intensity(emotional_state)
+        
+        # Red component based on pleasure (negative = more red)
+        r = 0.5 - pleasure * 0.5
+        
+        # Green component based on arousal (positive = more green)
+        g = 0.5 + arousal * 0.5
+        
+        # Blue component based on dominance (positive = more blue)
+        b = 0.5 + dominance * 0.5
+        
+        # Alpha based on intensity (not used in standard RGB tuples)
+        a = 1.0
+        
+        return (r, g, b)
 
 
 # Factory function to create the appropriate emotion model
