@@ -21,6 +21,10 @@ services:
       bash -c "
         source /opt/ros/$${ROS_DISTRO}/setup.bash &&
         source /ros_ws/install/setup.bash &&
+        # Start feature flags manager first
+        ros2 run ros_emotion feature_flags_manager.py &
+        sleep 2 &&  # Allow feature flags manager to initialize
+        # Then start other services
         ros2 run ros_emotion node_lifecycle_manager.py &
         ros2 run ros_emotion emotional_state_manager.py &
         ros2 run ros_emotion llm_integration.py &

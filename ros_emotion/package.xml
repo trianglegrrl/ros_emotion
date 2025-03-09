@@ -20,6 +20,7 @@
   <depend>python3-numpy</depend>
   <depend>python3-requests</depend>
   <depend>python3-psutil</depend>
+  <depend>python3-json</depend>
 
   <exec_depend>rosidl_default_runtime</exec_depend>
 

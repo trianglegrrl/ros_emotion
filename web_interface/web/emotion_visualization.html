@@ -625,6 +625,202 @@
             align-self: flex-end;
             margin-top: 10px;
         }
+        
+        .feature-flags-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .feature-flags-container h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        
+        .feature-flags-list {
+            margin-top: 10px;
+        }
+        
+        .feature-flag-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        
+        .feature-flag-info {
+            flex: 1;
+        }
+        
+        .feature-flag-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .feature-flag-description {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        
+        .feature-flag-error {
+            color: #dc3545;
+            font-size: 0.9em;
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #f8d7da;
+            border-radius: 4px;
+        }
+        
+        .feature-flags-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .feature-flags-test-results {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        
+        .feature-flags-test-results p {
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+        
+        .btn {
+            display: inline-block;
+            font-weight: 400;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: middle;
+            user-select: none;
+            border: 1px solid transparent;
+            padding: 0.375rem 0.75rem;
+            font-size: 1rem;
+            line-height: 1.5;
+            border-radius: 0.25rem;
+            transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            border-radius: 0.2rem;
+        }
+        
+        .btn-primary {
+            color: #fff;
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        
+        .btn-info {
+            color: #fff;
+            background-color: #17a2b8;
+            border-color: #17a2b8;
+        }
+        
+        .btn-warning {
+            color: #212529;
+            background-color: #ffc107;
+            border-color: #ffc107;
+        }
+        
+        .mt-2 {
+            margin-top: 0.5rem;
+        }
+        
+        .mt-3 {
+            margin-top: 1rem;
+        }
+        
+        .ml-2 {
+            margin-left: 0.5rem;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 24px;
+        }
+        
+        .toggle-switch-checkbox {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-switch-label {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-switch-label:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        .toggle-switch-checkbox:checked + .toggle-switch-label {
+            background-color: #2196F3;
+        }
+        
+        .toggle-switch-checkbox:checked + .toggle-switch-label:before {
+            transform: translateX(16px);
+        }
+        
+        .loading-message {
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .refresh-button {
+            background-color: #e3f2fd;
+            border: none;
+            color: #0d6efd;
+            padding: 4px;
+            cursor: pointer;
+            float: right;
+            border-radius: 4px;
+        }
+        
+        .refresh-button:hover {
+            background-color: #d0e7fa;
+        }
+        
+        .feature-flag-error {
+            color: #dc3545;
+            font-size: 0.9em;
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #f8d7da;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -695,6 +891,492 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Include Feature Flags Controls - Moved here for better visibility -->
+            <div id="feature-flags-container">
+                <!-- Directly embedding feature flags controls instead of fetching -->
+                <div class="feature-flags-container">
+                    <h3>Feature Flags</h3>
+                    <div id="feature-flags-list">
+                        <p class="loading-message">Loading feature flags...</p>
+                    </div>
+                    <div class="feature-flags-actions">
+                        <button onclick="loadFeatureFlags()" class="btn btn-sm btn-primary">Refresh Flags</button>
+                        <button onclick="testFeatureFlagsService()" class="btn btn-sm btn-info">Test Service</button>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .feature-flags-container {
+                    margin-top: 20px;
+                    padding: 15px;
+                    background-color: #f8f9fa;
+                    border-radius: 8px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }
+                
+                .feature-flags-container h3 {
+                    margin-top: 0;
+                    color: #495057;
+                }
+                
+                .feature-flags-list {
+                    margin-top: 10px;
+                }
+                
+                .feature-flag-item {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px;
+                    margin-bottom: 10px;
+                    background-color: #fff;
+                    border-radius: 4px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                }
+                
+                .feature-flag-info {
+                    flex: 1;
+                }
+                
+                .feature-flag-name {
+                    font-weight: bold;
+                    margin-bottom: 5px;
+                }
+                
+                .feature-flag-description {
+                    font-size: 0.9em;
+                    color: #6c757d;
+                }
+                
+                .feature-flag-error {
+                    color: #dc3545;
+                    font-size: 0.9em;
+                    margin-top: 10px;
+                    padding: 8px;
+                    background-color: #f8d7da;
+                    border-radius: 4px;
+                }
+                
+                .feature-flags-actions {
+                    margin-top: 15px;
+                    display: flex;
+                    gap: 10px;
+                }
+                
+                .feature-flags-test-results {
+                    margin-top: 15px;
+                    padding: 10px;
+                    background-color: #e9ecef;
+                    border-radius: 4px;
+                    font-family: monospace;
+                    font-size: 0.9em;
+                }
+                
+                .feature-flags-test-results p {
+                    margin: 5px 0;
+                    line-height: 1.4;
+                }
+                
+                .btn {
+                    display: inline-block;
+                    font-weight: 400;
+                    text-align: center;
+                    white-space: nowrap;
+                    vertical-align: middle;
+                    user-select: none;
+                    border: 1px solid transparent;
+                    padding: 0.375rem 0.75rem;
+                    font-size: 1rem;
+                    line-height: 1.5;
+                    border-radius: 0.25rem;
+                    transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+                }
+                
+                .btn-sm {
+                    padding: 0.25rem 0.5rem;
+                    font-size: 0.875rem;
+                    line-height: 1.5;
+                    border-radius: 0.2rem;
+                }
+                
+                .btn-primary {
+                    color: #fff;
+                    background-color: #007bff;
+                    border-color: #007bff;
+                }
+                
+                .btn-info {
+                    color: #fff;
+                    background-color: #17a2b8;
+                    border-color: #17a2b8;
+                }
+                
+                .btn-warning {
+                    color: #212529;
+                    background-color: #ffc107;
+                    border-color: #ffc107;
+                }
+                
+                .mt-2 {
+                    margin-top: 0.5rem;
+                }
+                
+                .mt-3 {
+                    margin-top: 1rem;
+                }
+                
+                .ml-2 {
+                    margin-left: 0.5rem;
+                }
+                
+                .toggle-switch {
+                    position: relative;
+                    display: inline-block;
+                    width: 40px;
+                    height: 24px;
+                }
+                
+                .toggle-switch-checkbox {
+                    opacity: 0;
+                    width: 0;
+                    height: 0;
+                }
+                
+                .toggle-switch-label {
+                    position: absolute;
+                    cursor: pointer;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: #ccc;
+                    transition: .4s;
+                    border-radius: 24px;
+                }
+                
+                .toggle-switch-label:before {
+                    position: absolute;
+                    content: "";
+                    height: 16px;
+                    width: 16px;
+                    left: 4px;
+                    bottom: 4px;
+                    background-color: white;
+                    transition: .4s;
+                    border-radius: 50%;
+                }
+                
+                .toggle-switch-checkbox:checked + .toggle-switch-label {
+                    background-color: #2196F3;
+                }
+                
+                .toggle-switch-checkbox:checked + .toggle-switch-label:before {
+                    transform: translateX(16px);
+                }
+                
+                .loading-message {
+                    color: #6c757d;
+                    font-style: italic;
+                }
+                
+                .refresh-button {
+                    background-color: #e3f2fd;
+                    border: none;
+                    color: #0d6efd;
+                    padding: 4px;
+                    cursor: pointer;
+                    float: right;
+                    border-radius: 4px;
+                }
+                
+                .refresh-button:hover {
+                    background-color: #d0e7fa;
+                }
+                
+                .feature-flag-error {
+                    color: #dc3545;
+                    font-size: 0.9em;
+                    margin-top: 10px;
+                    padding: 8px;
+                    background-color: #f8d7da;
+                    border-radius: 4px;
+                }
+            </style>
+
+            <script>
+                function loadFeatureFlags() {
+                    const featureFlagsList = document.getElementById('feature-flags-list');
+                    featureFlagsList.innerHTML = '<p class="loading-message">Loading feature flags...</p>';
+                    
+                    console.log("Attempting to connect to feature_flags service...");
+                    
+                    // Check if ROS connection is established
+                    if (!ros || !ros.isConnected) {
+                        console.error("Cannot load feature flags: ROS connection not established");
+                        featureFlagsList.innerHTML = `
+                            <div class="feature-flag-error">
+                                Error: ROS connection not established.
+                                <p>Please ensure you're connected to ROS before trying to load feature flags.</p>
+                                <button class="btn btn-sm btn-outline-primary mt-2" onclick="reconnectRos()">Reconnect to ROS</button>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Add a simple status message
+                    const addStatusMsg = (msg) => {
+                        console.log(msg);
+                        const statusElem = document.createElement('p');
+                        statusElem.className = 'loading-message';
+                        statusElem.textContent = msg;
+                        featureFlagsList.appendChild(statusElem);
+                    };
+                    
+                    // Create a hardcoded set of default feature flags in case we can't connect to the service
+                    const defaultFeatureFlags = {
+                        "rumination_enabled": {
+                            "name": "rumination_enabled",
+                            "value": "true",
+                            "description": "Enable/disable the rumination engine"
+                        },
+                        "llm_integration_enabled": {
+                            "name": "llm_integration_enabled",
+                            "value": "true", 
+                            "description": "Enable/disable LLM integration for sensory processing"
+                        },
+                        "use_llm_for_rumination": {
+                            "name": "use_llm_for_rumination",
+                            "value": "false",
+                            "description": "Enable/disable LLM calls during rumination process"
+                        },
+                        "personality_influence_enabled": {
+                            "name": "personality_influence_enabled",
+                            "value": "true",
+                            "description": "Enable/disable personality influence on emotional state"
+                        },
+                        "emotion_decay_enabled": {
+                            "name": "emotion_decay_enabled",
+                            "value": "true",
+                            "description": "Enable/disable natural decay of emotions over time"
+                        }
+                    };
+                    
+                    // Function to create the feature flags UI from a set of flags
+                    const createFeatureFlagsUI = (featureFlags) => {
+                        // Clear the container
+                        featureFlagsList.innerHTML = '';
+                        
+                        // Add refresh button
+                        const refreshButton = document.createElement('button');
+                        refreshButton.className = 'refresh-button';
+                        refreshButton.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+                        refreshButton.title = 'Refresh feature flags';
+                        refreshButton.addEventListener('click', loadFeatureFlags);
+                        featureFlagsList.appendChild(refreshButton);
+                        
+                        // Create a container for the flags
+                        const flagsContainer = document.createElement('div');
+                        flagsContainer.className = 'feature-flags-items';
+                        featureFlagsList.appendChild(flagsContainer);
+                        
+                        // If no feature flags, show a message
+                        if (Object.keys(featureFlags).length === 0) {
+                            flagsContainer.innerHTML = '<p>No feature flags available.</p>';
+                            return;
+                        }
+                        
+                        // Add each feature flag to the UI
+                        for (const flagName in featureFlags) {
+                            const flag = featureFlags[flagName];
+                            
+                            // Create flag item
+                            const flagItem = document.createElement('div');
+                            flagItem.className = 'feature-flag-item';
+                            
+                            // Feature flag info
+                            const flagInfo = document.createElement('div');
+                            flagInfo.className = 'feature-flag-info';
+                            
+                            const flagNameElement = document.createElement('div');
+                            flagNameElement.className = 'feature-flag-name';
+                            flagNameElement.textContent = formatFlagName(flagName);
+                            flagInfo.appendChild(flagNameElement);
+                            
+                            const flagDescriptionElement = document.createElement('div');
+                            flagDescriptionElement.className = 'feature-flag-description';
+                            flagDescriptionElement.textContent = flag.description;
+                            flagInfo.appendChild(flagDescriptionElement);
+                            
+                            flagItem.appendChild(flagInfo);
+                            
+                            // Toggle switch
+                            const toggleContainer = document.createElement('div');
+                            toggleContainer.className = 'toggle-switch';
+                            
+                            const toggleInput = document.createElement('input');
+                            toggleInput.type = 'checkbox';
+                            toggleInput.className = 'toggle-switch-checkbox';
+                            toggleInput.id = `feature-flag-${flagName}`;
+                            toggleInput.checked = flag.value === 'true' || flag.value === true;
+                            
+                            // Add event listener to toggle
+                            toggleInput.addEventListener('change', function() {
+                                const newValue = this.checked;
+                                setFeatureFlag(flagName, newValue);
+                            });
+                            
+                            const toggleLabel = document.createElement('label');
+                            toggleLabel.className = 'toggle-switch-label';
+                            toggleLabel.htmlFor = `feature-flag-${flagName}`;
+                            
+                            toggleContainer.appendChild(toggleInput);
+                            toggleContainer.appendChild(toggleLabel);
+                            
+                            flagItem.appendChild(toggleContainer);
+                            flagsContainer.appendChild(flagItem);
+                        }
+                    };
+                    
+                    // Function to format flag names for display
+                    const formatFlagName = (name) => {
+                        return name.replace(/_/g, ' ').split(' ').map(word => 
+                            word.charAt(0).toUpperCase() + word.slice(1)
+                        ).join(' ');
+                    };
+                    
+                    // Try to check available services first
+                    addStatusMsg("Checking available ROS services...");
+                    
+                    try {
+                        ros.getServices(function(services) {
+                            console.log("Available services:", services);
+                            const hasFeatureFlagsService = services.includes('/feature_flags');
+                            
+                            if (!hasFeatureFlagsService) {
+                                addStatusMsg("Warning: feature_flags service not found in the ROS service list");
+                                addStatusMsg("Using default feature flags instead");
+                                createFeatureFlagsUI(defaultFeatureFlags);
+                                return;
+                            }
+                            
+                            addStatusMsg("Found feature_flags service. Checking service type...");
+                            
+                            // Check the service type
+                            ros.getServiceType('/feature_flags', function(serviceType) {
+                                if (!serviceType) {
+                                    addStatusMsg("Error: Could not determine service type for /feature_flags");
+                                    addStatusMsg("Using default feature flags instead");
+                                    createFeatureFlagsUI(defaultFeatureFlags);
+                                    return;
+                                }
+                                
+                                addStatusMsg(`Service type is: ${serviceType}`);
+                                
+                                // Create a service client to call the feature_flags service
+                                const featureFlagsClient = new ROSLIB.Service({
+                                    ros: ros,
+                                    name: '/feature_flags',
+                                    serviceType: serviceType
+                                });
+                                
+                                // Create a service request to list all feature flags
+                                const request = new ROSLIB.ServiceRequest({
+                                    operation: 'list',
+                                    feature_name: '',
+                                    value: ''
+                                });
+                                
+                                addStatusMsg("Sending request to feature_flags service...");
+                                
+                                // Call the service
+                                featureFlagsClient.callService(request, function(response) {
+                                    console.log("Received feature flags response:", response);
+                                    addStatusMsg("Received response from feature_flags service");
+                                    
+                                    if (response.success) {
+                                        // Process the feature flags
+                                        const featureFlags = {};
+                                        for (let i = 0; i < response.feature_names.length; i++) {
+                                            featureFlags[response.feature_names[i]] = {
+                                                name: response.feature_names[i],
+                                                value: response.feature_values[i],
+                                                description: response.feature_descriptions[i]
+                                            };
+                                        }
+                                        
+                                        // Create the UI
+                                        createFeatureFlagsUI(featureFlags);
+                                    } else {
+                                        // Show error message
+                                        addStatusMsg(`Error from service: ${response.error_message}`);
+                                        addStatusMsg("Using default feature flags instead");
+                                        createFeatureFlagsUI(defaultFeatureFlags);
+                                    }
+                                }, function(error) {
+                                    // Handle service call error
+                                    console.error("Error calling feature flags service:", error);
+                                    addStatusMsg(`Error calling service: ${error}`);
+                                    addStatusMsg("Using default feature flags instead");
+                                    createFeatureFlagsUI(defaultFeatureFlags);
+                                });
+                            });
+                        });
+                    } catch (e) {
+                        console.error("Error checking ROS services:", e);
+                        addStatusMsg(`Error checking ROS services: ${e.message}`);
+                        addStatusMsg("Using default feature flags instead");
+                        createFeatureFlagsUI(defaultFeatureFlags);
+                    }
+                }
+                
+                function setFeatureFlag(flagName, value) {
+                    // Create a service client to call the feature_flags service
+                    const featureFlagsClient = new ROSLIB.Service({
+                        ros: ros,
+                        name: '/feature_flags',
+                        serviceType: 'ros_emotion/srv/FeatureFlags'
+                    });
+                    
+                    // Create a service request to set a feature flag
+                    const request = new ROSLIB.ServiceRequest({
+                        operation: 'set',
+                        feature_name: flagName,
+                        value: value.toString()
+                    });
+                    
+                    // Call the service
+                    featureFlagsClient.callService(request, function(response) {
+                        if (response.success) {
+                            addDebugMessage(`Feature flag '${formatFlagName(flagName)}' set to ${value}`);
+                        } else {
+                            addDebugMessage(`Error setting feature flag '${formatFlagName(flagName)}': ${response.error_message}`, 'error');
+                            // Refresh to get the current state
+                            loadFeatureFlags();
+                        }
+                    }, function(error) {
+                        addDebugMessage(`Error connecting to feature flags service`, 'error');
+                        console.error('Error calling feature flags service:', error);
+                        // Refresh to get the current state
+                        loadFeatureFlags();
+                    });
+                }
+                
+                function formatFlagName(flagName) {
+                    // Convert camelCase or snake_case to Title Case
+                    return flagName
+                        .replace(/_/g, ' ')
+                        .replace(/([A-Z])/g, ' $1')
+                        .replace(/^./, function(str) { return str.toUpperCase(); });
+                }
+                
+                // Load feature flags after ROS connection is established
+                document.addEventListener('ros-connected', function() {
+                    // Load feature flags
+                    loadFeatureFlags();
+                });
+            </script>
             
             <!-- Moved description outside the emotional state container -->
             <div class="emotional-description-container collapsed" id="emotional-description">
@@ -822,7 +1504,15 @@
                     </div>
                     <span id="testPublisherStatus" style="margin-left: 10px; font-size: 0.9em; color: #6c757d;">Checking status...</span>
                 </div>
+                
+                <div style="margin-top: 10px;">
+                    <button id="resetConnectionButton" class="btn btn-sm btn-outline-primary">Reset Connection</button>
+                    <button id="debugTopicsButton" class="btn btn-sm btn-outline-info ml-2">Debug Topics</button>
+                    <button id="downloadButton" class="btn btn-sm btn-outline-secondary ml-2">Save Raw</button>
+                </div>
             </div>
+            
+            <!-- Original feature flags container was here - now moved above -->
             
             <div class="rumination-container">
                 <h3>Active Ruminations</h3>
@@ -875,16 +1565,36 @@
     </div>
 
     <script>
-        // Initialize ROS connection
-        let ros;
-        let emotionalStateSubscription;
-        let ruminationSubscription;
-        let sensoryInputPublisher;
-        let emotionalResponseSubscription;
+        // Variables to store ROS connection and topic information
+        let ros = null;
+        let sensoryInputPublisher = null;
+        let emotionalStateSubscription = null;
+        let ruminationSubscription = null;
+        let emotionalResponseSubscription = null;
+        let allTopicsSubscriptions = [];
         
-        // Chart objects
-        let emotionsChart;
-        let historyChart;
+        // Constants
+        const MAX_HISTORY_SIZE = 10; // Max number of messages to keep per topic (reduced from 100)
+        const MAX_LOCALSTORAGE_MESSAGES = 5; // Max number of messages to save in localStorage per topic
+        
+        // Storage for message history
+        const messageHistory = {
+            all: [],
+            sensory_input: [],
+            emotional_state: [], 
+            rumination_update: [],
+            emotional_response: [],
+            completed_ruminations: []
+        };
+        
+        // Message history view settings
+        const historyView = {
+            currentTab: 'all',
+            currentPage: 1,
+            pageSize: 10,
+            filter: '',
+            sortOrder: 'newest'
+        };
         
         // History data
         const historyDataPoints = 60;
@@ -899,26 +1609,6 @@
         
         // Completed ruminations
         const completedRuminations = [];
-        
-        // Message history storage - store up to 10000 messages per topic
-        const MAX_HISTORY_SIZE = 10000;
-        const messageHistory = {
-            all: [],
-            sensory_input: [],
-            emotional_state: [], 
-            rumination_update: [],
-            emotional_response: [],
-            completed_ruminations: []
-        };
-        
-        // Current view settings for message history
-        const historyView = {
-            currentTab: 'all',
-            currentPage: 1,
-            messagesPerPage: 50,
-            searchTerm: '',
-            filteredMessages: []
-        };
         
         // Test publisher node control
         let testPublisherRunning = false;
@@ -1061,171 +1751,203 @@
         
         function saveMessageHistory() {
             try {
-                // Only save essential topics to localStorage to avoid quota errors
-                const essentialTopics = ['sensory_input', 'emotional_state', 'rumination_update', 'emotional_response', 'completed_ruminations'];
-                const storageData = {
-                    all: messageHistory.all.slice(0, 500) // Only store last 500 of all messages
-                };
+                // Clear localStorage first to prevent quota issues
+                localStorage.removeItem('rosEmotionMessageHistory');
                 
-                // Filter out any emotion_visualization messages from 'all' array
-                if (storageData.all && Array.isArray(storageData.all)) {
-                    storageData.all = storageData.all.filter(item => {
-                        return item.topic !== 'emotion_visualization' && 
-                              item.topic !== '/emotion_visualization';
-                    });
+                // Create a pruned copy of the message history with fewer messages
+                const prunedHistory = {};
+                
+                // For each topic, only keep the most recent MAX_LOCALSTORAGE_MESSAGES messages
+                for (const topic in messageHistory) {
+                    if (messageHistory.hasOwnProperty(topic) && messageHistory[topic].length > 0) {
+                        prunedHistory[topic] = messageHistory[topic].slice(0, MAX_LOCALSTORAGE_MESSAGES);
+                    }
                 }
                 
-                // Add the essential topics
-                essentialTopics.forEach(topicKey => {
-                    if (messageHistory[topicKey]) {
-                        storageData[topicKey] = messageHistory[topicKey].slice(0, 100); // Only 100 messages per topic
-                    }
-                });
-                
-                // Try to save, but don't break if it fails
-                localStorage.setItem('rosEmotionMessageHistory', JSON.stringify(storageData));
-                addDebugMessage('Saved message history subset to localStorage');
-                return true;
+                // Try to save the pruned history
+                localStorage.setItem('rosEmotionMessageHistory', JSON.stringify(prunedHistory));
             } catch (e) {
                 console.error('Failed to save message history to localStorage:', e);
-                addDebugMessage('Note: Not saving to localStorage due to quota limits');
                 
-                // If we got a quota error, clear some existing data to make room
+                // If still failing, try with an even smaller subset
                 try {
-                    // Try to clear less important data
-                    localStorage.removeItem('rosEmotionMessageHistory');
-                    addDebugMessage('Cleared existing history from localStorage to make room');
-                } catch (clearError) {
-                    console.error('Failed to clear localStorage:', clearError);
+                    // Try clearing localStorage completely
+                    localStorage.clear();
+                    
+                    // Only save the most important topics with even fewer messages
+                    const criticalHistory = {
+                        emotional_state: messageHistory.emotional_state?.slice(0, 3) || [],
+                        rumination_update: messageHistory.rumination_update?.slice(0, 3) || []
+                    };
+                    
+                    localStorage.setItem('rosEmotionMessageHistory', JSON.stringify(criticalHistory));
+                } catch (innerError) {
+                    console.error('Still failed to save even minimal history:', innerError);
                 }
-                return false;
             }
         }
         
         function loadMessageHistory() {
             try {
-                const stored = localStorage.getItem('rosEmotionMessageHistory');
-                if (stored) {
-                    const loaded = JSON.parse(stored);
+                const savedHistory = localStorage.getItem('rosEmotionMessageHistory');
+                if (savedHistory) {
+                    const parsedHistory = JSON.parse(savedHistory);
                     
-                    // Remove emotion_visualization topic if it exists in stored data
-                    if (loaded.emotion_visualization) {
-                        delete loaded.emotion_visualization;
-                    }
-                    
-                    // If the 'all' array exists, filter out emotion_visualization messages
-                    if (loaded.all && Array.isArray(loaded.all)) {
-                        loaded.all = loaded.all.filter(item => {
-                            return item.topic !== 'emotion_visualization' && 
-                                  item.topic !== '/emotion_visualization';
-                        });
-                    }
-                    
-                    for (const topic in loaded) {
-                        if (messageHistory[topic]) {
-                            messageHistory[topic] = loaded[topic];
+                    // Merge saved history with current (empty) history
+                    for (const topic in parsedHistory) {
+                        if (parsedHistory.hasOwnProperty(topic)) {
+                            // Initialize the topic if it doesn't exist
+                            if (!messageHistory[topic]) {
+                                messageHistory[topic] = [];
+                            }
+                            
+                            // Only take MAX_HISTORY_SIZE messages
+                            messageHistory[topic] = parsedHistory[topic].slice(0, MAX_HISTORY_SIZE);
                         }
                     }
-                    addDebugMessage('Loaded message history from localStorage');
-                    updateMessageHistoryView();
+                    
+                    console.log('Loaded message history from localStorage');
                 }
             } catch (e) {
-                console.error('Failed to load message history:', e);
-                addDebugMessage('Failed to load message history: ' + e.message);
+                console.error('Failed to load message history from localStorage:', e);
+                // If loading fails, clear localStorage to prevent future errors
+                localStorage.removeItem('rosEmotionMessageHistory');
             }
         }
         
+        // Update the message history view based on current filter/sort settings
         function updateMessageHistoryView() {
-            const historyList = document.getElementById('messageHistoryList');
-            const pagination = document.getElementById('historyPagination');
-            const counter = document.getElementById('historyCounter');
-            const searchTerm = document.getElementById('historySearchInput').value.toLowerCase();
+            const historyList = document.querySelector('.message-history-list');
+            if (!historyList) return;
+
+            // Get messages for the current tab
+            let messages = messageHistory[historyView.currentTab] || [];
             
-            // Filter messages based on current tab and search term
-            historyView.filteredMessages = messageHistory[historyView.currentTab].filter(item => {
-                if (!searchTerm) return true;
-                
-                // Search in the message content
-                if (typeof item.message === 'string' && item.message.toLowerCase().includes(searchTerm)) {
-                    return true;
-                }
-                
-                // For object messages, stringify them for searching
-                if (typeof item.message === 'object') {
-                    const stringified = JSON.stringify(item.message);
-                    return stringified.toLowerCase().includes(searchTerm);
-                }
-                
-                return false;
-            });
+            // Apply filter if any
+            if (historyView.filter && historyView.filter.length > 0) {
+                const filterText = historyView.filter.toLowerCase();
+                messages = messages.filter(msg => 
+                    JSON.stringify(msg).toLowerCase().includes(filterText)
+                );
+            }
             
             // Calculate pagination
-            const totalMessages = historyView.filteredMessages.length;
-            const totalPages = Math.ceil(totalMessages / historyView.messagesPerPage);
-            
-            // Adjust current page if out of bounds
-            if (historyView.currentPage > totalPages) {
-                historyView.currentPage = Math.max(1, totalPages);
-            }
+            const totalPages = Math.ceil(messages.length / historyView.pageSize) || 1;
+            historyView.currentPage = Math.min(historyView.currentPage, totalPages);
             
             // Get current page of messages
-            const startIdx = (historyView.currentPage - 1) * historyView.messagesPerPage;
-            const endIdx = Math.min(startIdx + historyView.messagesPerPage, totalMessages);
-            const displayedMessages = historyView.filteredMessages.slice(startIdx, endIdx);
+            const startIdx = (historyView.currentPage - 1) * historyView.pageSize;
+            const endIdx = Math.min(startIdx + historyView.pageSize, messages.length);
+            const pageMessages = messages.slice(startIdx, endIdx);
             
-            // Update counter
-            counter.textContent = `Showing ${startIdx + 1}-${endIdx} of ${totalMessages} messages`;
-            
-            // Clear list
+            // Clear current list
             historyList.innerHTML = '';
             
-            // Display messages
-            let lastTopic = null;
-            
-            displayedMessages.forEach(item => {
-                // Add topic header if topic changes or if viewing "all" tab
-                if (historyView.currentTab === 'all' && item.topic !== lastTopic) {
-                    const topicHeader = document.createElement('div');
-                    topicHeader.className = 'history-topic';
-                    topicHeader.textContent = formatTopicName(item.topic || 'unknown');
-                    historyList.appendChild(topicHeader);
-                    lastTopic = item.topic;
-                }
-                
-                const msgElement = document.createElement('div');
-                msgElement.className = `message-item ${item.type || ''}`;
-                
-                let messageContent;
-                if (typeof item.message === 'string') {
-                    messageContent = item.message;
-                } else {
-                    // For object messages, display in a readable format
-                    messageContent = formatMessage(item.topic, item.message);
-                }
-                
-                msgElement.innerHTML = `<strong>[${item.formattedTime}]</strong>: ${messageContent}`;
-                historyList.appendChild(msgElement);
-            });
-            
-            // If no messages
-            if (displayedMessages.length === 0) {
-                const emptyMsg = document.createElement('div');
-                emptyMsg.className = 'message-item';
-                emptyMsg.textContent = 'No messages found.';
-                historyList.appendChild(emptyMsg);
+            // Check if we have any messages
+            if (messages.length === 0) {
+                historyList.innerHTML = '<div class="no-messages">No messages available for this topic.</div>';
+                return;
             }
             
-            // Update pagination
-            updatePagination(pagination, totalPages);
+            // Add messages to list
+            for (const message of pageMessages) {
+                const messageItem = document.createElement('div');
+                messageItem.className = 'message-history-item';
+                
+                // Format timestamp
+                const timestamp = new Date(message.timestamp);
+                const timeStr = timestamp.toLocaleTimeString() + '.' + 
+                                timestamp.getMilliseconds().toString().padStart(3, '0');
+                
+                // Create message header
+                const header = document.createElement('div');
+                header.className = 'message-history-header';
+                header.innerHTML = `<span class="message-time">${timeStr}</span>`;
+                messageItem.appendChild(header);
+                
+                // Create message content (pretty-printed JSON)
+                const content = document.createElement('pre');
+                content.className = 'message-history-content';
+                try {
+                    content.textContent = JSON.stringify(message.data, null, 2);
+                } catch (e) {
+                    content.textContent = 'Error displaying message: ' + e.message;
+                }
+                messageItem.appendChild(content);
+                
+                historyList.appendChild(messageItem);
+            }
+            
+            // Update pagination controls
+            updatePaginationControls(messages.length, totalPages);
         }
-        
-        function formatTopicName(topic) {
-            // Convert camelCase or snake_case to Title Case with Spaces
-            return topic
-                .replace(/_/g, ' ')
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/^./, str => str.toUpperCase())
-                .trim();
+
+        // Update pagination controls based on current state
+        function updatePaginationControls(totalItems, totalPages) {
+            const paginationElement = document.querySelector('.message-history-pagination');
+            if (!paginationElement) return;
+            
+            // Clear current controls
+            paginationElement.innerHTML = '';
+            
+            // Don't show pagination if we have just one page
+            if (totalPages <= 1) return;
+            
+            // Add previous button
+            const prevButton = document.createElement('button');
+            prevButton.textContent = '«';
+            prevButton.disabled = historyView.currentPage === 1;
+            prevButton.addEventListener('click', function() {
+                if (historyView.currentPage > 1) {
+                    historyView.currentPage--;
+                    updateMessageHistoryView();
+                }
+            });
+            paginationElement.appendChild(prevButton);
+            
+            // Add page buttons
+            // Show up to 5 pages, centered around current page when possible
+            const maxPagesToShow = 5;
+            let startPage = Math.max(1, historyView.currentPage - Math.floor(maxPagesToShow / 2));
+            let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+            
+            // Adjust start page if we're near the end
+            if (endPage - startPage + 1 < maxPagesToShow) {
+                startPage = Math.max(1, endPage - maxPagesToShow + 1);
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.textContent = i;
+                pageButton.className = i === historyView.currentPage ? 'active' : '';
+                pageButton.addEventListener('click', function() {
+                    historyView.currentPage = i;
+                    updateMessageHistoryView();
+                });
+                paginationElement.appendChild(pageButton);
+            }
+            
+            // Add next button
+            const nextButton = document.createElement('button');
+            nextButton.textContent = '»';
+            nextButton.disabled = historyView.currentPage === totalPages;
+            nextButton.addEventListener('click', function() {
+                if (historyView.currentPage < totalPages) {
+                    historyView.currentPage++;
+                    updateMessageHistoryView();
+                }
+            });
+            paginationElement.appendChild(nextButton);
+            
+            // Update counter
+            updateMessageCounter();
+        }
+
+        // Helper function to format topic names for display
+        function formatTopicName(topicKey) {
+            return topicKey.replace(/_/g, ' ').split(' ').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ');
         }
         
         function formatMessage(topic, message) {
@@ -1292,76 +2014,6 @@
                 console.error('Error formatting message:', e);
                 return `Error formatting message: ${e.message}`;
             }
-        }
-        
-        function updatePagination(paginationElement, totalPages) {
-            paginationElement.innerHTML = '';
-            
-            // No pagination needed for 0 or 1 page
-            if (totalPages <= 1) return;
-            
-            // Add first page button
-            const firstBtn = document.createElement('button');
-            firstBtn.textContent = '«';
-            firstBtn.addEventListener('click', () => {
-                historyView.currentPage = 1;
-                updateMessageHistoryView();
-            });
-            paginationElement.appendChild(firstBtn);
-            
-            // Add previous button
-            const prevBtn = document.createElement('button');
-            prevBtn.textContent = '‹';
-            prevBtn.addEventListener('click', () => {
-                if (historyView.currentPage > 1) {
-                    historyView.currentPage--;
-                    updateMessageHistoryView();
-                }
-            });
-            paginationElement.appendChild(prevBtn);
-            
-            // Calculate which page buttons to show
-            let startPage = Math.max(1, historyView.currentPage - 2);
-            let endPage = Math.min(totalPages, startPage + 4);
-            
-            // Adjust start if we're near the end
-            if (endPage - startPage < 4) {
-                startPage = Math.max(1, endPage - 4);
-            }
-            
-            // Add page buttons
-            for (let i = startPage; i <= endPage; i++) {
-                const pageBtn = document.createElement('button');
-                pageBtn.textContent = i;
-                if (i === historyView.currentPage) {
-                    pageBtn.className = 'active';
-                }
-                pageBtn.addEventListener('click', () => {
-                    historyView.currentPage = i;
-                    updateMessageHistoryView();
-                });
-                paginationElement.appendChild(pageBtn);
-            }
-            
-            // Add next button
-            const nextBtn = document.createElement('button');
-            nextBtn.textContent = '›';
-            nextBtn.addEventListener('click', () => {
-                if (historyView.currentPage < totalPages) {
-                    historyView.currentPage++;
-                    updateMessageHistoryView();
-                }
-            });
-            paginationElement.appendChild(nextBtn);
-            
-            // Add last page button
-            const lastBtn = document.createElement('button');
-            lastBtn.textContent = '»';
-            lastBtn.addEventListener('click', () => {
-                historyView.currentPage = totalPages;
-                updateMessageHistoryView();
-            });
-            paginationElement.appendChild(lastBtn);
         }
         
         function exportMessageHistory() {
@@ -1449,28 +2101,23 @@
         }
         
         function initRosConnection(wsUrl) {
-            // Clear existing connection
+            // Clean up any existing connections
+            cleanupTopics();
+            
+            // If there's an existing connection, disconnect first
             if (ros) {
-                ros.close();
-                
-                if (emotionalStateSubscription) {
-                    emotionalStateSubscription.unsubscribe();
-                    emotionalStateSubscription = null;
+                try {
+                    ros.close();
+                } catch (e) {
+                    console.error("Error closing existing connection:", e);
                 }
-                
-                if (ruminationSubscription) {
-                    ruminationSubscription.unsubscribe();
-                    ruminationSubscription = null;
-                }
-                
-                if (emotionalResponseSubscription) {
-                    emotionalResponseSubscription.unsubscribe();
-                    emotionalResponseSubscription = null;
-                }
+                ros = null;
             }
             
             addDebugMessage(`Attempting to connect to ROS WebSocket at: ${wsUrl}`);
+            console.log("Attempting connection to:", wsUrl);
             
+            // Try with the provided URL
             ros = new ROSLIB.Ros({
                 url: wsUrl
             });
@@ -1482,39 +2129,37 @@
                 
                 // Log the URL for debugging
                 addDebugMessage(`Connected to WebSocket URL: ${wsUrl}`);
+                console.log("Connected successfully to:", wsUrl);
                 
                 // Setup publishers
                 setupPublishers();
                 
-                // Subscribe to emotional state
-                subscribeToEmotionalState();
+                // Setup subscribers
+                setupSubscribers();
                 
-                // Subscribe to rumination updates
-                subscribeToRuminations();
-                
-                // Subscribe to emotional responses
-                subscribeToEmotionalResponses();
-                
-                // Subscribe to ALL topics for complete message monitoring
-                subscribeToAllTopics();
-                
-                // Test that we can access the ROS graph
-                try {
-                    ros.getTopics(function(topics) {
-                        addDebugMessage(`Available topics: ${topics.topics.join(', ')}`);
-                    });
-                } catch (e) {
-                    addDebugMessage(`Error getting topics: ${e}`);
-                }
+                // Load feature flags
+                loadFeatureFlags();
             });
 
             ros.on('error', function(error) {
                 addDebugMessage(`Error connecting to websocket server: ${error}`);
+                console.error("Connection error:", error);
                 document.getElementById('status').className = 'status disconnected';
                 document.getElementById('status').innerHTML = 'Error connecting to ROS';
                 
-                // More detailed error message
-                addDebugMessage(`Connection error details: ${JSON.stringify(error)}`);
+                // If the connection failed and we haven't tried alternate URLs, try them now
+                if (wsUrl === document.getElementById('wsUrlInput').value && 
+                    !wsUrl.includes('localhost:9090') && 
+                    !wsUrl.includes('127.0.0.1:9090')) {
+                    
+                    // Try localhost fallback
+                    setTimeout(function() {
+                        const fallbackUrl = 'ws://localhost:9090';
+                        addDebugMessage(`First connection attempt failed. Trying fallback URL: ${fallbackUrl}`);
+                        console.log("Trying fallback URL:", fallbackUrl);
+                        initRosConnection(fallbackUrl);
+                    }, 1000);
+                }
             });
 
             ros.on('close', function() {
@@ -1658,113 +2303,49 @@
         }
         
         function subscribeToAllTopics() {
-            addDebugMessage('Setting up subscriptions to all topics for message history tracking');
-            
-            // First get the list of all available topics
+            // Get all topics
             ros.getTopics(function(result) {
                 const topics = result.topics;
-                const types = result.types;
                 
-                addDebugMessage(`Found ${topics.length} topics to monitor`);
+                // Clear existing subscriptions before adding new ones
+                if (allTopicsSubscriptions.length > 0) {
+                    for (let sub of allTopicsSubscriptions) {
+                        try {
+                            sub.unsubscribe();
+                        } catch (e) {
+                            console.error(`Error unsubscribing from topic: ${e}`);
+                        }
+                    }
+                    allTopicsSubscriptions = [];
+                }
                 
-                // Create a mapping of existing topic categories
-                const topicCategories = {
-                    '/emotional_state': 'emotional_state',
-                    '/rumination_update': 'rumination_update',
-                    '/emotional_response': 'emotional_response',
-                    '/sensory_input': 'sensory_input'
-                };
-                
-                // List of topics to exclude from history to save space
-                const excludedTopics = [
-                    // Skip high-frequency topics that generate a lot of data
-                    '/rosout',
-                    '/parameter_events', 
-                    '/clock',
-                    '/emotion_visualization', // Added this topic to exclude it
-                    // Add other topics that you don't need to log
-                ];
-                
-                // For each topic, subscribe and log messages
-                topics.forEach((topic, index) => {
-                    // Skip topics we already have specialized handling for
-                    if (topicCategories[topic]) {
-                        addDebugMessage(`Skipping specialized topic: ${topic}`);
-                        return;
+                // Create subscriptions for all topics to monitor all messages
+                for (let i = 0; i < topics.length; i++) {
+                    const topic = topics[i];
+                    
+                    // Skip certain high-volume topics that might overwhelm the UI
+                    if (topic.includes('/parameter') || 
+                        topic.includes('/rosout') ||
+                        topic.includes('/clock')) {
+                        continue;
                     }
                     
-                    // Skip excluded topics
-                    if (excludedTopics.includes(topic)) {
-                        addDebugMessage(`Skipping excluded topic: ${topic}`);
-                        return;
-                    }
-                    
-                    // Create a new section in message history for this topic if not exists
-                    const topicKey = topic.replace(/\//g, '_').substring(1); // Remove leading slash
-                    
-                    // Skip the emotion_visualization topic completely
-                    if (topicKey === 'emotion_visualization') {
-                        addDebugMessage(`Skipping emotion_visualization topic`);
-                        return;
-                    }
-                    
-                    if (!messageHistory[topicKey]) {
-                        messageHistory[topicKey] = [];
-                        
-                        // Also add a button in the UI for this topic
-                        const historyNav = document.querySelector('.message-history-nav');
-                        const topicButton = document.createElement('button');
-                        topicButton.className = 'history-tab';
-                        topicButton.dataset.tab = topicKey;
-                        topicButton.textContent = formatTopicName(topicKey);
-                        topicButton.addEventListener('click', function() {
-                            document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
-                            this.classList.add('active');
-                            historyView.currentTab = topicKey;
-                            historyView.currentPage = 1;
-                            updateMessageHistoryView();
-                        });
-                        historyNav.appendChild(topicButton);
-                        
-                        // Add option to the filter dropdown
-                        const topicFilter = document.getElementById('historyTopicFilter');
-                        const option = document.createElement('option');
-                        option.value = topicKey;
-                        option.textContent = formatTopicName(topicKey);
-                        topicFilter.appendChild(option);
-                    }
-                    
-                    try {
-                        // Subscribe to the topic
+                    ros.getTopicType(topic, function(type) {
                         const subscription = new ROSLIB.Topic({
                             ros: ros,
                             name: topic,
-                            messageType: types[index]
+                            messageType: type
                         });
-                        
-                        // Add throttling for high-frequency topics
-                        let lastMessageTime = 0;
                         
                         subscription.subscribe(function(message) {
-                            const now = Date.now();
-                            // Only store a message from this topic every 2 seconds at most
-                            if (now - lastMessageTime > 2000) {
-                                // Store in message history
-                                storeMessageInHistory(topicKey, message);
-                                lastMessageTime = now;
-                                
-                                // Add debug message for the first few messages from each topic
-                                if (messageHistory[topicKey].length <= 5) {
-                                    addDebugMessage(`Received message on topic: ${topic}`);
-                                }
-                            }
+                            // Add the message to the history
+                            addMessageToHistory(topic, message);
                         });
                         
-                        addDebugMessage(`Subscribed to topic: ${topic} (${types[index]})`);
-                    } catch (e) {
-                        addDebugMessage(`Error subscribing to topic ${topic}: ${e.message}`);
-                    }
-                });
+                        // Store the subscription for cleanup
+                        allTopicsSubscriptions.push(subscription);
+                    });
+                }
             });
         }
         
@@ -2654,6 +3235,435 @@
                 return originalRosOnConnection.apply(ros, arguments);
             }
         };
+
+        // Load external components
+        document.addEventListener('DOMContentLoaded', function() {
+            // We're no longer loading feature flags controls via fetch because we've embedded them directly in the HTML
+            /* 
+            fetch('feature_flags_controls.html')
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('feature-flags-container').innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Error loading feature flags controls:', error);
+                    document.getElementById('feature-flags-container').innerHTML = 
+                        '<div class="feature-flags-container"><h3>Feature Flags</h3><p>Error loading feature flags controls.</p></div>';
+                });
+            */
+            console.log("Feature flags controls are directly embedded in the HTML");
+        });
+
+        function setupSubscribers() {
+            // Subscribe to emotional state
+            subscribeToEmotionalState();
+            
+            // Subscribe to rumination updates
+            subscribeToRuminations();
+            
+            // Subscribe to emotional responses
+            subscribeToEmotionalResponses();
+            
+            // Subscribe to ALL topics for complete message monitoring
+            subscribeToAllTopics();
+            
+            // Test that we can access the ROS graph
+            try {
+                ros.getTopics(function(topics) {
+                    addDebugMessage(`Available topics: ${topics.topics.join(', ')}`);
+                });
+            } catch (e) {
+                addDebugMessage(`Error getting topics: ${e}`);
+            }
+        }
+
+        function cleanupTopics() {
+            // Clean up existing subscriptions
+            if (emotionalStateSubscription) {
+                try {
+                    emotionalStateSubscription.unsubscribe();
+                } catch (e) {
+                    console.error("Error unsubscribing from emotional state:", e);
+                }
+                emotionalStateSubscription = null;
+            }
+            
+            if (ruminationSubscription) {
+                try {
+                    ruminationSubscription.unsubscribe();
+                } catch (e) {
+                    console.error("Error unsubscribing from rumination:", e);
+                }
+                ruminationSubscription = null;
+            }
+            
+            if (emotionalResponseSubscription) {
+                try {
+                    emotionalResponseSubscription.unsubscribe();
+                } catch (e) {
+                    console.error("Error unsubscribing from emotional response:", e);
+                }
+                emotionalResponseSubscription = null;
+            }
+            
+            // Clean up any other topic subscriptions
+            if (allTopicsSubscriptions) {
+                for (const sub of allTopicsSubscriptions) {
+                    try {
+                        sub.unsubscribe();
+                    } catch (e) {
+                        console.error("Error unsubscribing from topic:", e);
+                    }
+                }
+                allTopicsSubscriptions = [];
+            }
+        }
+
+        function addMessageToHistory(topic, message) {
+            // Skip certain high-volume topics
+            if (topic.includes('/parameter') || 
+                topic.includes('/rosout') ||
+                topic.includes('/clock')) {
+                return;
+            }
+            
+            // Create a topic key for storage
+            const topicKey = topic.replace(/\//g, '_').substring(1); // Remove leading slash
+            
+            // Initialize the array for this topic if it doesn't exist
+            if (!messageHistory[topicKey]) {
+                messageHistory[topicKey] = [];
+                
+                // Also add a button in the UI for this topic
+                const historyNav = document.querySelector('.message-history-nav');
+                if (historyNav) {
+                    const topicButton = document.createElement('button');
+                    topicButton.className = 'history-tab';
+                    topicButton.dataset.tab = topicKey;
+                    topicButton.textContent = formatTopicName(topicKey);
+                    topicButton.addEventListener('click', function() {
+                        document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+                        this.classList.add('active');
+                        historyView.currentTab = topicKey;
+                        historyView.currentPage = 1;
+                        updateMessageHistoryView();
+                    });
+                    historyNav.appendChild(topicButton);
+                    
+                    // Add option to the filter dropdown
+                    const topicFilter = document.getElementById('historyTopicFilter');
+                    if (topicFilter) {
+                        const option = document.createElement('option');
+                        option.value = topicKey;
+                        option.textContent = formatTopicName(topicKey);
+                        topicFilter.appendChild(option);
+                    }
+                }
+            }
+            
+            // Store this message using our storage function
+            storeMessageInHistory(topicKey, message);
+        }
+
+        // Store a message in the message history for a specific topic
+        function storeMessageInHistory(topicKey, message) {
+            // Skip storing if the topic key is invalid
+            if (!topicKey) {
+                return;
+            }
+            
+            // Initialize the topic array if it doesn't exist
+            if (!messageHistory[topicKey]) {
+                messageHistory[topicKey] = [];
+            }
+            
+            // Create a simplified version of the message for storage
+            let simplifiedMessage;
+            try {
+                // Try to create a simplified version with only essential fields
+                if (typeof message === 'object') {
+                    // Extract only essential fields based on message type
+                    simplifiedMessage = {};
+                    
+                    // Most important fields from various message types
+                    const essentialFields = ['data', 'header', 'timestamp', 'value', 'name', 'id', 'text'];
+                    
+                    for (const field of essentialFields) {
+                        if (message[field] !== undefined) {
+                            simplifiedMessage[field] = message[field];
+                        }
+                    }
+                    
+                    // If we couldn't extract any fields, use the original
+                    if (Object.keys(simplifiedMessage).length === 0) {
+                        simplifiedMessage = message;
+                    }
+                } else {
+                    // For primitive types, use as is
+                    simplifiedMessage = message;
+                }
+            } catch (e) {
+                console.error('Error simplifying message:', e);
+                simplifiedMessage = { error: 'Failed to simplify message' };
+            }
+            
+            // Add timestamp
+            const messageWithTimestamp = {
+                timestamp: new Date(),
+                data: simplifiedMessage
+            };
+            
+            // Store at beginning of array (newest first)
+            messageHistory[topicKey].unshift(messageWithTimestamp);
+            
+            // Also store in the 'all' category if it exists
+            if (messageHistory.all) {
+                messageHistory.all.unshift(messageWithTimestamp);
+                
+                // Limit the size of the 'all' category
+                while (messageHistory.all.length > MAX_HISTORY_SIZE) {
+                    messageHistory.all.pop();
+                }
+            }
+            
+            // Limit the number of messages stored per topic
+            while (messageHistory[topicKey].length > MAX_HISTORY_SIZE) {
+                messageHistory[topicKey].pop();
+            }
+            
+            // Save to localStorage occasionally (not on every message)
+            const shouldSave = (
+                // Save after a few messages to ensure we capture something
+                messageHistory[topicKey].length === 3 ||
+                // Save every 5 messages thereafter
+                (messageHistory[topicKey].length > 3 && messageHistory[topicKey].length % 5 === 0)
+            );
+            
+            if (shouldSave) {
+                // Use setTimeout to avoid blocking the UI
+                setTimeout(saveMessageHistory, 0);
+            }
+            
+            // If this is the current tab, update the view
+            if (historyView && historyView.currentTab === topicKey) {
+                updateMessageHistoryView();
+            }
+            
+            // Update message counter
+            updateMessageCounter();
+        }
+
+        function testFeatureFlagsService() {
+            const featureFlagsList = document.getElementById('feature-flags-list');
+            featureFlagsList.innerHTML = '<p class="loading-message">Testing feature flags service...</p>';
+            
+            // Check if ROS connection is established
+            if (!ros || !ros.isConnected) {
+                console.error("Cannot test feature flags: ROS connection not established");
+                featureFlagsList.innerHTML = `
+                    <div class="feature-flag-error">
+                        Error: ROS connection not established.
+                        <p>Please ensure you're connected to ROS before testing the feature flags service.</p>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="reconnectRos()">Reconnect to ROS</button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Create a results div
+            const resultsDiv = document.createElement('div');
+            resultsDiv.className = 'feature-flags-test-results';
+            featureFlagsList.appendChild(resultsDiv);
+            
+            // Add status line
+            function addStatus(message) {
+                const statusLine = document.createElement('p');
+                statusLine.innerHTML = message;
+                resultsDiv.appendChild(statusLine);
+                console.log(message);
+            }
+            
+            addStatus('1. Testing ROS connection... <strong>Connected</strong>');
+            
+            // Test getting services list
+            addStatus('2. Testing getServices() API...');
+            try {
+                ros.getServices(function(services) {
+                    if (services && Array.isArray(services)) {
+                        addStatus(`&nbsp;&nbsp;&nbsp;✓ Got ${services.length} services`);
+                        
+                        // Check if feature_flags is in the list
+                        if (services.includes('/feature_flags')) {
+                            addStatus('&nbsp;&nbsp;&nbsp;✓ Found /feature_flags in services list');
+                        } else {
+                            addStatus('&nbsp;&nbsp;&nbsp;❌ /feature_flags NOT found in services list');
+                        }
+                        
+                        // Show all services for debugging
+                        addStatus(`&nbsp;&nbsp;&nbsp;Available services: ${services.join(', ')}`);
+                        
+                        // Test service type lookup
+                        addStatus('3. Testing service type lookup...');
+                        try {
+                            ros.getServiceType('/feature_flags', function(type) {
+                                if (type) {
+                                    addStatus(`&nbsp;&nbsp;&nbsp;✓ Service type for /feature_flags: ${type}`);
+                                    
+                                    // Test direct service call
+                                    testServiceCall(type);
+                                } else {
+                                    addStatus('&nbsp;&nbsp;&nbsp;❌ Could not get service type for /feature_flags');
+                                }
+                            });
+                        } catch (e) {
+                            addStatus(`&nbsp;&nbsp;&nbsp;❌ Error getting service type: ${e.message}`);
+                        }
+                    } else {
+                        addStatus('&nbsp;&nbsp;&nbsp;❌ getServices() did not return a valid array');
+                    }
+                });
+            } catch (e) {
+                addStatus(`&nbsp;&nbsp;&nbsp;❌ Error calling getServices(): ${e.message}`);
+            }
+            
+            // Test making a service call
+            function testServiceCall(serviceType) {
+                addStatus('4. Testing service call...');
+                
+                const client = new ROSLIB.Service({
+                    ros: ros,
+                    name: '/feature_flags',
+                    serviceType: serviceType
+                });
+                
+                addStatus('&nbsp;&nbsp;&nbsp;✓ Created service client');
+                
+                const request = new ROSLIB.ServiceRequest({
+                    operation: 'list',
+                    feature_name: '',
+                    value: ''
+                });
+                
+                addStatus('&nbsp;&nbsp;&nbsp;✓ Created service request');
+                addStatus('&nbsp;&nbsp;&nbsp;Calling service...');
+                
+                client.callService(request, 
+                    function(response) {
+                        addStatus('&nbsp;&nbsp;&nbsp;✓ Service call successful!');
+                        addStatus(`&nbsp;&nbsp;&nbsp;Response: ${JSON.stringify(response)}`);
+                        
+                        // Add a refresh button
+                        const refreshButton = document.createElement('button');
+                        refreshButton.className = 'btn btn-sm btn-primary mt-3';
+                        refreshButton.innerHTML = 'Load Feature Flags';
+                        refreshButton.addEventListener('click', loadFeatureFlags);
+                        resultsDiv.appendChild(refreshButton);
+                    },
+                    function(error) {
+                        addStatus(`&nbsp;&nbsp;&nbsp;❌ Service call failed: ${error}`);
+                        
+                        // Add retry buttons
+                        const retryServiceButton = document.createElement('button');
+                        retryServiceButton.className = 'btn btn-sm btn-warning mt-2';
+                        retryServiceButton.innerHTML = 'Retry Test';
+                        retryServiceButton.addEventListener('click', testFeatureFlagsService);
+                        resultsDiv.appendChild(retryServiceButton);
+                        
+                        const reconnectButton = document.createElement('button');
+                        reconnectButton.className = 'btn btn-sm btn-primary mt-2 ml-2';
+                        reconnectButton.innerHTML = 'Reconnect to ROS';
+                        reconnectButton.addEventListener('click', reconnectRos);
+                        resultsDiv.appendChild(reconnectButton);
+                    }
+                );
+            }
+        }
+
+        // Function to update the message counter display
+        function updateMessageCounter() {
+            const counterElement = document.querySelector('.message-history-counter');
+            if (!counterElement) return;
+            
+            let totalMessages = 0;
+            let filteredCount = 0;
+            
+            // Count total messages
+            for (const topic in messageHistory) {
+                if (messageHistory.hasOwnProperty(topic)) {
+                    totalMessages += messageHistory[topic].length;
+                    
+                    // Count filtered messages if a filter is active
+                    if (historyView.filter && historyView.filter.length > 0) {
+                        filteredCount += messageHistory[topic].filter(msg => 
+                            JSON.stringify(msg).toLowerCase().includes(historyView.filter.toLowerCase())
+                        ).length;
+                    }
+                }
+            }
+            
+            // Update counter text
+            if (historyView.filter && historyView.filter.length > 0) {
+                counterElement.textContent = `${filteredCount} matching messages of ${totalMessages} total`;
+            } else {
+                counterElement.textContent = `${totalMessages} total messages`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load message history from localStorage
+            loadMessageHistory();
+            
+            // Set default WebSocket URL
+            const hostname = window.location.hostname;
+            const defaultWsUrl = 'ws://' + hostname + ':9090';
+            document.getElementById('wsUrlInput').value = defaultWsUrl;
+            
+            // Add connect button event listener
+            document.getElementById('connect-button').addEventListener('click', function() {
+                const wsUrl = document.getElementById('wsUrlInput').value;
+                initRosConnection(wsUrl);
+            });
+            
+            // Initialize ROS connection
+            addDebugMessage('Initializing ROS connection with default URL');
+            initRosConnection(defaultWsUrl);
+            
+            // Function to reconnect to ROS
+            window.reconnectRos = function() {
+                const wsUrl = document.getElementById('wsUrlInput').value;
+                addDebugMessage('Attempting to reconnect to ROS...');
+                initRosConnection(wsUrl);
+            };
+            
+            // Setup event listener for saving history on page unload
+            window.addEventListener('beforeunload', function() {
+                saveMessageHistory();
+            });
+            
+            // Initialize history view if not already done
+            updateMessageHistoryView();
+            
+            // Clear localStorage button
+            document.getElementById('clearHistoryButton').addEventListener('click', function() {
+                if (confirm('Are you sure you want to clear all message history? This cannot be undone.')) {
+                    // Clear local arrays
+                    for (const topic in messageHistory) {
+                        if (messageHistory.hasOwnProperty(topic)) {
+                            messageHistory[topic] = [];
+                        }
+                    }
+                    
+                    // Clear localStorage
+                    localStorage.removeItem('rosEmotionMessageHistory');
+                    
+                    // Update UI
+                    updateMessageHistoryView();
+                    updateMessageCounter();
+                    
+                    addDebugMessage('Message history cleared');
+                }
+            });
+        });
     </script>
 </body>
 </html> 

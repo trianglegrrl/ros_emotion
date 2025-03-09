@@ -17,6 +17,7 @@ from ros_emotion.emotion_model import create_emotion_model
 from ros_emotion.personality_model import create_personality_model
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from ros_emotion.feature_flags_client import FeatureFlagsClient
 
 class RuminationEngine(Node):
     def __init__(self):
@@ -34,6 +35,17 @@ class RuminationEngine(Node):
         personality_config = self.config.get('personality', {})
         self.personality_model = create_personality_model(personality_model_type, personality_config)
         
+        # Initialize feature flags client (with a smaller delay to avoid startup timing issues)
+        self.get_logger().info("ALAINA: Initializing feature flags client in rumination engine")
+        time.sleep(1.0)  # Small delay to ensure feature flags service is started
+        self.feature_flags = FeatureFlagsClient(self)
+        
+        # Internal cache for feature flags when service is unreachable
+        self._feature_flags_local_cache = {
+            'rumination_enabled': True,
+            'use_llm_for_rumination': False  # Default to not using LLM for rumination
+        }
+        
         # Initialize rumination state
         self.active_ruminations = {}
         self.rumination_lock = Lock()
@@ -42,14 +54,14 @@ class RuminationEngine(Node):
         self.rumination_probability = self.config.get('rumination_probability', 0.3)
         self.recency_factor = self.config.get('recency_factor', 0.5)
         self.intensity_threshold = self.config.get('intensity_threshold', 0.5)
-        self.rumination_check_interval = self.config.get('rumination_check_interval', 10.0)
-        self.max_rumination_stages = self.config.get('max_rumination_stages', 3)
+        self.rumination_check_interval = self.config.get('rumination_check_interval', 15.0)
+        self.max_rumination_stages = self.config.get('max_rumination_stages', 4)
         self.rumination_decay_factor = self.config.get('rumination_decay_factor', 0.8)
         
         # LLM configuration
-        self.api_key = os.environ.get('LLM_API_KEY', 'demo-key')
-        self.api_url = self.config.get('api_url', 'http://localhost:8000/api/chat')
-        self.model = self.config.get('model', 'gpt-3.5-turbo')
+        self.api_key = os.environ.get('OPENAI_API_KEY', '')
+        self.api_url = "https://api.openai.com/v1/chat/completions"
+        self.model = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
         self.max_tokens = self.config.get('max_tokens', 1024)
         self.temperature = self.config.get('temperature', 0.7)
         
@@ -61,6 +73,14 @@ class RuminationEngine(Node):
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
+        )
+        
+        # Create a periodic timer to ensure feature flags are refreshed periodically
+        # This helps in case the feature flags service becomes available after initial startup
+        self.feature_flags_refresh_timer = self.create_timer(
+            30.0,  # Check every 30 seconds
+            self.refresh_feature_flags,
+            callback_group=callback_group
         )
         
         # Subscribe to emotional state updates
@@ -126,6 +146,23 @@ class RuminationEngine(Node):
         """Store the current emotional state"""
         self.current_emotional_state = msg
     
+    def refresh_feature_flags(self):
+        """Periodically refresh feature flags to ensure we have the latest values"""
+        try:
+            # Attempt to refresh the flags cache
+            success = self.feature_flags.refresh_cache()
+            if success:
+                self.get_logger().debug("ALAINA: Successfully refreshed feature flags cache")
+                # Update our local cache with the service values
+                self._feature_flags_local_cache['rumination_enabled'] = self.feature_flags.is_feature_enabled(
+                    'rumination_enabled', default=True)
+                self._feature_flags_local_cache['use_llm_for_rumination'] = self.feature_flags.is_feature_enabled(
+                    'use_llm_for_rumination', default=False)
+            else:
+                self.get_logger().debug("ALAINA: Failed to refresh feature flags cache")
+        except Exception as e:
+            self.get_logger().warn(f"ALAINA: Error refreshing feature flags: {str(e)}")
+    
     def rumination_callback(self, msg):
         """Handle incoming rumination updates"""
         self.get_logger().debug(f"ALAINA: Received rumination update for {msg.original_input_id}")
@@ -139,6 +176,22 @@ class RuminationEngine(Node):
     
     def process_ruminations(self):
         """Process active ruminations"""
+        # First check if rumination is enabled (with a fallback value)
+        # Use a long default timeout for the first check
+        is_rumination_enabled = self.feature_flags.is_feature_enabled('rumination_enabled', default=True)
+        
+        # If rumination is disabled, conclude all active ruminations
+        if not is_rumination_enabled:
+            with self.rumination_lock:
+                rumination_ids = list(self.active_ruminations.keys())
+                if rumination_ids:
+                    self.get_logger().info(f"ALAINA: Rumination is disabled, concluding {len(rumination_ids)} active ruminations")
+                
+            for rum_id in rumination_ids:
+                self.conclude_rumination(rum_id, "Rumination has been disabled")
+                
+            return
+            
         if not self.current_emotional_state:
             return
         
@@ -154,18 +207,7 @@ class RuminationEngine(Node):
             
             # Check if we should continue this rumination
             if not self.should_continue_rumination(rumination):
-                # Create a final update
-                rumination["rumination_msg"].is_final = True
-                rumination["rumination_msg"].description = "Rumination has concluded naturally."
-                
-                # Publish final update
-                self.rumination_publisher.publish(rumination["rumination_msg"])
-                
-                # Remove from active ruminations
-                with self.rumination_lock:
-                    del self.active_ruminations[rum_id]
-                
-                self.get_logger().info(f"ALAINA: Naturally concluded rumination on {rum_id}")
+                self.conclude_rumination(rum_id, "Rumination has concluded naturally")
                 continue
             
             # Update this rumination
@@ -179,82 +221,93 @@ class RuminationEngine(Node):
     
     def should_continue_rumination(self, rumination):
         """Determine if a rumination should continue"""
-        # Check if we've reached the maximum rumination stages
+        # Check max stages
         if rumination["stage"] >= self.max_rumination_stages:
             return False
         
-        # Check if the rumination has decayed below threshold
-        intensity = rumination["rumination_msg"].intensity
-        if intensity < self.intensity_threshold / 2.0:
+        # Check intensity decay
+        if rumination["intensity"] < 0.2:  # Stop if intensity is too low
             return False
         
-        # Apply personality influence to continuation decision
-        # Neurotic personalities tend to ruminate more
-        neuroticism = self.personality_model.get_trait_value("neuroticism")
-        # Higher neuroticism means higher chance of continuing rumination
-        neuroticism_factor = 1.0 + (neuroticism - 0.5) * 0.6
+        # Check if a specific event should terminate the rumination
+        if "should_terminate" in rumination and rumination["should_terminate"]:
+            return False
         
-        # Conscientious personalities may limit unhelpful rumination
-        conscientiousness = self.personality_model.get_trait_value("conscientiousness")
-        # Higher conscientiousness means lower chance of continuing negative rumination
-        if rumination.get("valence", 0) < 0:  # Negative rumination
-            conscientiousness_factor = 1.0 - (conscientiousness - 0.5) * 0.4
-        else:
-            conscientiousness_factor = 1.0  # No effect on positive rumination
+        # Check if rumination is disabled
+        if not self.feature_flags.is_feature_enabled('rumination_enabled', default=True):
+            return False
         
-        # Calculate continuation probability based on personality
-        continuation_probability = 0.7 * neuroticism_factor * conscientiousness_factor
+        # Check if enough time has passed
+        current_time = time.time()
+        elapsed_time = current_time - rumination["start_time"]
         
-        # Apply random chance with personality-influenced probability
-        return random.random() < continuation_probability
+        # Random chance to naturally conclude rumination increases with time
+        termination_probability = 0.1 + (elapsed_time / 300.0) * 0.4  # Max 50% after 5 minutes
+        if random.random() < termination_probability:
+            return False
+        
+        return True
     
     def update_rumination(self, rum_id, rumination):
         """Update a rumination process"""
         try:
-            # Increment the stage
-            rumination["stage"] += 1
+            # Check again if rumination is enabled (could have changed mid-process)
+            if not self.feature_flags.is_feature_enabled('rumination_enabled', default=True):
+                self.conclude_rumination(rum_id, "Rumination has been disabled")
+                return
+                
+            # Prepare the rumination message for update
+            rumination_msg = rumination["rumination_msg"]
             
-            # Update the rumination message
-            msg = rumination["rumination_msg"]
-            msg.rumination_stage = rumination["stage"]
+            # Increment the stage
+            new_stage = rumination["stage"] + 1
+            rumination["stage"] = new_stage
+            
+            # Update intensity with decay
+            new_intensity = rumination["intensity"] * self.rumination_decay_factor
+            rumination["intensity"] = new_intensity
+            
+            # Update the message
+            rumination_msg.rumination_stage = new_stage
+            rumination_msg.intensity = new_intensity
             
             # Calculate elapsed time
-            elapsed_seconds = time.time() - rumination["start_time"]
-            msg.elapsed_time = utils.create_duration(elapsed_seconds)
+            elapsed_time = time.time() - rumination["start_time"]
+            duration = utils.create_duration(seconds=elapsed_time)
+            rumination_msg.elapsed_time = duration
             
-            # Decay the intensity
-            msg.intensity *= self.rumination_decay_factor
+            # Query the LLM for the next stage of rumination
+            self.get_logger().info(f"ALAINA: Calling LLM for rumination {rum_id} stage {new_stage}")
+            llm_data = self.query_llm_for_rumination(rumination_msg, rum_id)
             
-            # Adjust the intensity based on personality (neuroticism and extraversion)
-            neuroticism = self.personality_model.get_trait_value("neuroticism")
-            extraversion = self.personality_model.get_trait_value("extraversion")
+            if llm_data:
+                # Create an emotional response from the LLM data
+                self.create_emotional_response(llm_data, rum_id, rumination_msg)
+                
+                # Update the emotional state
+                self.update_emotional_state(llm_data, rum_id)
+                
+                # Update the rumination message with new data
+                rumination_msg.description = llm_data.get("rumination_text", "Continuing to ruminate...")
+            else:
+                # If LLM fails, use a default message
+                rumination_msg.description = f"Ruminating on {rumination_msg.primary_emotion} state."
             
-            # Higher neuroticism prolongs rumination intensity
-            neuroticism_factor = 1.0 + (neuroticism - 0.5) * 0.4
-            # Higher extraversion reduces negative rumination intensity, increases positive
-            if rumination.get("valence", 0) < 0:  # Negative rumination
-                extraversion_factor = 1.0 - (extraversion - 0.5) * 0.2
-            else:  # Positive rumination
-                extraversion_factor = 1.0 + (extraversion - 0.5) * 0.2
-            
-            # Apply personality factors to intensity
-            msg.intensity *= neuroticism_factor * extraversion_factor
-            msg.intensity = utils.clamp(msg.intensity, 0.0, 1.0)
-            
-            # Query LLM for next stage of rumination
-            self.query_llm_for_rumination(msg, rum_id)
+            # Publish the updated rumination message
+            self.rumination_publisher.publish(rumination_msg)
             
         except Exception as e:
             self.get_logger().error(f"ALAINA: Error updating rumination: {str(e)}")
-            # In case of error, mark as final to avoid further processing
-            with self.rumination_lock:
-                if rum_id in self.active_ruminations:
-                    self.active_ruminations[rum_id]["rumination_msg"].is_final = True
-                    self.rumination_publisher.publish(self.active_ruminations[rum_id]["rumination_msg"])
-                    del self.active_ruminations[rum_id]
+            
+            # On error, gently conclude the rumination
+            self.conclude_rumination(rum_id, "Rumination terminated due to an error")
     
     def consider_new_rumination(self):
         """Consider starting a new rumination process"""
+        # Check if rumination is enabled
+        if not self.feature_flags.is_feature_enabled('rumination_enabled', default=True):
+            return
+            
         if not self.current_emotional_state:
             return
         
@@ -282,78 +335,92 @@ class RuminationEngine(Node):
     
     def start_new_rumination(self):
         """Start a new rumination process"""
+        # Final check if rumination is enabled
+        if not self.feature_flags.is_feature_enabled('rumination_enabled', default=True):
+            return
+            
         if not self.current_emotional_state:
             return
         
         # Generate a unique ID for this rumination
         rum_id = str(uuid.uuid4())
         
+        # Get current emotional state primary emotion for rumination
+        primary_emotion = self.current_emotional_state.primary_emotion
+        overall_intensity = self.current_emotional_state.intensity
+        
+        # Check if emotional intensity is enough to trigger rumination
+        if overall_intensity < self.intensity_threshold:
+            return
+        
         # Create a new rumination update message
-        msg = RuminationUpdate()
+        rumination_msg = RuminationUpdate()
+        rumination_msg.timestamp = utils.get_current_time()
+        rumination_msg.original_input_id = rum_id
+        rumination_msg.rumination_stage = 0
+        rumination_msg.elapsed_time = utils.create_duration(seconds=0.0)
+        rumination_msg.intensity = overall_intensity
+        rumination_msg.pleasure_change = 0.0
+        rumination_msg.arousal_change = 0.0
+        rumination_msg.dominance_change = 0.0
+        rumination_msg.happiness_change = 0.0
+        rumination_msg.sadness_change = 0.0
+        rumination_msg.anger_change = 0.0
+        rumination_msg.fear_change = 0.0
+        rumination_msg.disgust_change = 0.0
+        rumination_msg.surprise_change = 0.0
+        rumination_msg.description = f"Beginning to ruminate on {primary_emotion} state."
+        rumination_msg.is_final = False
         
-        # Set timestamp
-        msg.timestamp = utils.get_current_time()
-        
-        # Set original input ID
-        msg.original_input_id = rum_id
-        
-        # Set rumination stage (initial stage)
-        msg.rumination_stage = 0
-        
-        # Set elapsed time (just started)
-        msg.elapsed_time = utils.create_duration(0.0)
-        
-        # Set intensity based on emotional state and personality
-        intensity = self.current_emotional_state.intensity
-        neuroticism = self.personality_model.get_trait_value("neuroticism")
-        
-        # Higher neuroticism increases starting intensity
-        neuroticism_factor = 1.0 + (neuroticism - 0.5) * 0.4
-        # Set starting intensity based on current emotional intensity and neuroticism
-        msg.intensity = intensity * 0.8 * neuroticism_factor
-        msg.intensity = utils.clamp(msg.intensity, 0.0, 1.0)
-        
-        # Initialize change values (will be set by LLM)
-        msg.pleasure_change = 0.0
-        msg.arousal_change = 0.0
-        msg.dominance_change = 0.0
-        msg.happiness_change = 0.0
-        msg.sadness_change = 0.0
-        msg.anger_change = 0.0
-        msg.fear_change = 0.0
-        msg.disgust_change = 0.0
-        msg.surprise_change = 0.0
-        
-        # Set description
-        msg.description = f"Beginning to ruminate on {self.current_emotional_state.primary_emotion} state."
-        
-        # This is the initial update, not final
-        msg.is_final = False
-        
-        # Store the rumination
+        # Store the rumination in active ruminations
         with self.rumination_lock:
             self.active_ruminations[rum_id] = {
-                "rumination_msg": msg,
-                "stage": 0,
+                "rumination_msg": rumination_msg,
                 "start_time": time.time(),
-                "primary_emotion": self.current_emotional_state.primary_emotion,
-                "valence": self.current_emotional_state.pleasure,  # Store valence for later use
+                "stage": 0,
+                "intensity": overall_intensity,
+                "primary_emotion": primary_emotion
             }
         
-        # Publish the initial update
-        self.rumination_publisher.publish(msg)
-        
-        # Update last rumination time
-        self.last_rumination_time = time.time()
-        
+        # Publish the initial rumination update
+        self.rumination_publisher.publish(rumination_msg)
         self.get_logger().info(f"ALAINA: Started new rumination process {rum_id}")
-        
-        # Query LLM to start the rumination
-        self.query_llm_for_rumination(msg, rum_id)
     
     def query_llm_for_rumination(self, rumination_msg, rum_id):
         """Query the LLM to process a rumination update"""
         try:
+            # Check if LLM for rumination is enabled (use local cache if service unavailable)
+            use_llm = False
+            try:
+                use_llm = self.feature_flags.is_feature_enabled('use_llm_for_rumination', default=False)
+            except Exception:
+                # Fall back to local cache if service call fails
+                use_llm = self._feature_flags_local_cache.get('use_llm_for_rumination', False)
+            
+            if not use_llm:
+                self.get_logger().info(f"ALAINA: Skipping LLM call for rumination {rum_id} - feature disabled")
+                
+                # Get the primary emotion from the current emotional state
+                primary_emotion = "neutral"
+                if self.current_emotional_state:
+                    primary_emotion = self.current_emotional_state.primary_emotion
+                
+                # Create a simple default response without using LLM
+                default_data = {
+                    "rumination_text": f"Ruminating on {primary_emotion} (LLM disabled).",
+                    "emotional_impact": {
+                        "pleasure": 0.0,
+                        "arousal": 0.0,
+                        "dominance": 0.0,
+                        "primary_emotion": primary_emotion
+                    },
+                    "should_continue": rumination_msg.rumination_stage < (self.max_rumination_stages - 1)
+                }
+                
+                # Create an emotional response from the default data
+                self.create_emotional_response(default_data, rum_id, rumination_msg)
+                return
+            
             # Build prompt
             prompt = self.build_rumination_prompt(rumination_msg)
             
@@ -363,36 +430,22 @@ class RuminationEngine(Node):
             
             if not response_text:
                 self.get_logger().error(f"ALAINA: Empty response from LLM for rumination {rum_id}")
-                return
+                return None
             
             # Parse the response
-            try:
-                import re
-                json_match = re.search(r'({.*})', response_text, re.DOTALL)
-                
-                if json_match:
-                    json_text = json_match.group(1)
-                    llm_data = json.loads(json_text)
-                    
-                    # Create an emotional response from the LLM data
-                    self.create_emotional_response(llm_data, rum_id, rumination_msg)
-                    
-                    # Update the emotional state
-                    self.update_emotional_state(llm_data, rum_id)
-                else:
-                    self.get_logger().error(f"ALAINA: Could not parse LLM response: {response_text}")
-            except Exception as e:
-                self.get_logger().error(f"ALAINA: Error parsing LLM response: {str(e)}")
+            llm_data = self.parse_llm_response(response_text)
+            if llm_data:
+                # Create an emotional response from the LLM data
+                self.create_emotional_response(llm_data, rum_id, rumination_msg)
             
         except Exception as e:
             self.get_logger().error(f"ALAINA: Error querying LLM for rumination: {str(e)}")
+            # Add traceback for more detailed error information
+            import traceback
+            self.get_logger().error(f"ALAINA: Traceback: {traceback.format_exc()}")
     
     def build_rumination_prompt(self, rumination_msg):
-        """Build a prompt for the LLM to process rumination"""
-        # Only build prompt if we have emotional state
-        if not self.current_emotional_state:
-            self.get_logger().warn("ALAINA: Cannot build rumination prompt - no emotional state")
-            return "No emotional state available"
+        """Build a prompt for rumination"""
         
         # Format the current emotional state
         current_state = {}
@@ -422,9 +475,8 @@ class RuminationEngine(Node):
                 if "previous_responses" in rumination:
                     previous_stages = rumination["previous_responses"]
         
-        # Build the prompt
-        prompt = f"""You are the rumination process of a robot with a specific personality.
-Given the current emotional state, personality profile, and rumination stage, simulate how the robot would ruminate on its emotions.
+        # Build the prompt for the user message
+        prompt = f"""I need you to simulate the internal rumination process of a robot with the following personality and emotional state.
 
 PERSONALITY PROFILE:
 {personality_context}
@@ -432,77 +484,78 @@ PERSONALITY PROFILE:
 CURRENT EMOTIONAL STATE:
 {json.dumps(current_state, indent=2)}
 
-RUMINATION INFORMATION:
+RUMINATION STAGE:
 Stage: {rumination_msg.rumination_stage} of {self.max_rumination_stages}
 Elapsed time: {rumination_msg.elapsed_time.sec} seconds
 Intensity: {rumination_msg.intensity}
-Description: {rumination_msg.description}
-
+Current rumination description: {rumination_msg.description}
 """
 
         # Add previous rumination stages if available
         if previous_stages:
-            prompt += "PREVIOUS RUMINATION STAGES:\n"
+            prompt += "\nPREVIOUS RUMINATION STAGES:\n"
             for i, stage in enumerate(previous_stages):
-                prompt += f"Stage {i}: {stage.get('response_text', '')}\n"
-            
-        # Add personality-specific instructions
-        neuroticism = self.personality_model.get_trait_value("neuroticism")
-        openness = self.personality_model.get_trait_value("openness")
-        extraversion = self.personality_model.get_trait_value("extraversion")
+                prompt += f"Stage {i}: {stage}\n"
         
-        prompt += f"""
-Based on this information, and considering the personality traits (especially neuroticism at {neuroticism:.2f}),
-simulate how the robot would ruminate on its current emotional state:
+        # Add instructions for the response format
+        prompt += """
+Based on the personality traits and current emotional state, create the next rumination stage. 
+Consider how the robot would reflect on its current emotional state internally.
 
-1. How would the rumination process evolve at this stage?
-2. How would this rumination affect the emotional state?
-3. What thoughts would occur during this rumination?
+Respond with a JSON object in the following format:
+```json
+{
+  "rumination_text": "The internal thought process of the robot as it ruminates on its current emotional state",
+  "emotional_impact": {
+    "pleasure": float (-0.2 to 0.2), 
+    "arousal": float (-0.2 to 0.2), 
+    "dominance": float (-0.2 to 0.2),
+    "primary_emotion": "happiness|sadness|anger|fear|disgust|surprise"
+  },
+  "should_continue": boolean (whether rumination should continue to next stage)
+}
+```
 
-IMPORTANT CONSIDERATIONS:
-- {'Highly neurotic personalities tend to amplify negative emotions through rumination' if neuroticism > 0.7 else 'Low neuroticism personalities tend to process emotions more evenly'}
-- {'High openness leads to more abstract and philosophical rumination' if openness > 0.7 else 'Low openness leads to more concrete and practical rumination'}
-- {'Extraverted personalities ruminate less on negative emotions' if extraversion > 0.7 else 'Introverted personalities may dwell longer on internal emotional states'}
-- As rumination stages progress, the intensity should generally decrease
-- Later stages often lead to resolution or acceptance
-
-Respond ONLY with a valid JSON object in the following format:
-{{
-  "pleasure_change": float (-0.3 to 0.3),
-  "arousal_change": float (-0.3 to 0.3),
-  "dominance_change": float (-0.3 to 0.3),
-  "happiness_change": float (-0.2 to 0.2),
-  "sadness_change": float (-0.2 to 0.2),
-  "anger_change": float (-0.2 to 0.2),
-  "fear_change": float (-0.2 to 0.2),
-  "disgust_change": float (-0.2 to 0.2),
-  "surprise_change": float (-0.2 to 0.2),
-  "intensity": float (0.0 to 1.0),
-  "is_final": boolean,
-  "response_text": string (the rumination thoughts and process),
-  "description": string (short summary for the rumination update)
-}}"""
+Important considerations for this rumination stage:
+- Match the personality traits in your response (e.g., neurotic personalities ruminate more negatively)
+- The emotional impact values should be small deltas (changes), not absolute values
+- Use the current emotional state as a starting point for your rumination
+- Make the rumination process feel natural and evolving
+- The intensity of the rumination should gradually decrease with each stage
+"""
         
         return prompt
     
     def call_llm_api(self, prompt):
         """Call the LLM API with the given prompt"""
         try:
-            # Create request payload
+            if not self.api_key:
+                self.get_logger().error("ALAINA: Cannot call OpenAI API: API key not set")
+                return None
+            
+            # Create request payload for OpenAI
             payload = {
                 "model": self.model,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": [
+                    {"role": "system", "content": "You are the rumination process of a robot with a specific personality."},
+                    {"role": "user", "content": prompt}
+                ],
                 "max_tokens": self.max_tokens,
-                "temperature": self.temperature
+                "temperature": self.temperature,
+                "response_format": {"type": "json_object"}
             }
             
-            # Add API key to headers if not using localhost
-            headers = {}
-            if not self.api_url.startswith('http://localhost'):
-                headers["Authorization"] = f"Bearer {self.api_key}"
+            # Add API key to headers
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
             
             # Set longer timeout for API call
             timeout = 30.0  # 30 seconds
+            
+            # Log API request details (excluding the actual API key)
+            self.get_logger().debug(f"ALAINA: Calling OpenAI API with model {self.model} at {self.api_url}")
             
             # Call the API
             response = requests.post(
@@ -516,29 +569,22 @@ Respond ONLY with a valid JSON object in the following format:
             if response.status_code != 200:
                 self.get_logger().error(f"ALAINA: API request failed with status code {response.status_code}: {response.text}")
                 return None
-                
+            
             # Parse response JSON
             response_json = response.json()
             
-            # Extract content from response (adapt this based on your API's response format)
-            if isinstance(response_json, dict):
-                if "choices" in response_json and len(response_json["choices"]) > 0:
-                    # OpenAI-like API format
-                    return response_json["choices"][0]["message"]["content"]
-                elif "response" in response_json:
-                    # Custom API format
-                    return response_json["response"]
-                else:
-                    # Try to find any text content in the response
-                    for key, value in response_json.items():
-                        if isinstance(value, str) and len(value) > 10:
-                            return value
-            
-            # Fallback: return the whole response as string
-            return str(response_json)
+            # Extract content from OpenAI response
+            if "choices" in response_json and len(response_json["choices"]) > 0:
+                return response_json["choices"][0]["message"]["content"]
+            else:
+                self.get_logger().error(f"ALAINA: Unexpected OpenAI API response format: {response_json}")
+                return None
             
         except Exception as e:
-            self.get_logger().error(f"ALAINA: Error calling LLM API: {str(e)}")
+            self.get_logger().error(f"ALAINA: Error calling OpenAI API: {str(e)}")
+            # Add traceback for more detailed error information
+            import traceback
+            self.get_logger().error(f"ALAINA: Traceback: {traceback.format_exc()}")
             return None
     
     def create_emotional_response(self, data, rum_id, rumination_msg):
@@ -550,14 +596,14 @@ Respond ONLY with a valid JSON object in the following format:
             # Set timestamp
             response.timestamp = utils.get_current_time()
             
-            # Set stimulus ID to the rumination ID
+            # Set stimulus ID
             response.stimulus_id = rum_id
             
-            # This is a rumination response
+            # Set rumination flag
             response.is_rumination = True
             
-            # Set response text
-            response.response_text = data.get("response_text", "")
+            # Set response text from rumination text
+            response.response_text = data.get("rumination_text", "Continuing to ruminate...")
             
             # Set source
             response.source = "rumination"
@@ -565,101 +611,75 @@ Respond ONLY with a valid JSON object in the following format:
             # Set previous state (current state before update)
             response.previous_state = utils.copy_emotional_state(self.current_emotional_state)
             
-            # Copy deltas from LLM response
-            response.pleasure_delta = data.get("pleasure_change", 0.0)
-            response.arousal_delta = data.get("arousal_change", 0.0)
-            response.dominance_delta = data.get("dominance_change", 0.0)
+            # Extract emotional impact
+            emotional_impact = data.get("emotional_impact", {})
             
-            # Determine primary emotion (could be calculated based on changes)
-            emotions = self.emotion_model.get_all_emotions()
-            emotion_changes = {
-                e: data.get(f"{e}_change", 0.0) for e in emotions
-            }
-            # Primary emotion is the one with the largest absolute change
-            primary_emotion = max(emotion_changes.items(), key=lambda x: abs(x[1]))
-            response.primary_emotion = primary_emotion[0]
+            # Copy deltas from emotional impact
+            response.pleasure_delta = emotional_impact.get("pleasure", 0.0)
+            response.arousal_delta = emotional_impact.get("arousal", 0.0)
+            response.dominance_delta = emotional_impact.get("dominance", 0.0)
             
-            # Set intensity
-            response.intensity = data.get("intensity", rumination_msg.intensity)
+            # Set primary emotion
+            response.primary_emotion = emotional_impact.get("primary_emotion", response.previous_state.primary_emotion)
             
-            # Confidence is medium for rumination
-            response.confidence = 0.7
+            # Calculate intensity based on rumination stage and original intensity
+            stage_factor = 1.0 - (rumination_msg.rumination_stage / self.max_rumination_stages) * 0.5
+            response.intensity = rumination_msg.intensity * stage_factor
+            response.intensity = utils.clamp(response.intensity, 0.0, 1.0)
+            
+            # Set confidence (relatively high for rumination)
+            response.confidence = 0.8
             
             # Create metadata
             metadata = {
                 "rumination_stage": rumination_msg.rumination_stage,
                 "elapsed_time": rumination_msg.elapsed_time.sec,
-                "is_final": data.get("is_final", False),
-                "personality_influence": {
-                    "primary_trait": max(self.personality_model.get_all_traits().items(), key=lambda x: abs(x[1] - 0.5))[0]
-                }
+                "should_continue": data.get("should_continue", True),
+                "process_time": time.time()
             }
             response.metadata = json.dumps(metadata)
             
-            # Let the personality model modulate the response based on traits
-            modulated_response = self.personality_model.modulate_emotional_response(
-                self.current_emotional_state, 
-                response
-            )
-            
-            # Publish the emotional response
-            self.response_publisher.publish(modulated_response)
-            
-            # Store the response data for future reference
+            # Check if we should terminate this rumination
             with self.rumination_lock:
                 if rum_id in self.active_ruminations:
+                    # Store the should_continue flag to be checked in should_continue_rumination
+                    self.active_ruminations[rum_id]["should_terminate"] = not data.get("should_continue", True)
+                    
+                    # Store the response for future reference
                     if "previous_responses" not in self.active_ruminations[rum_id]:
                         self.active_ruminations[rum_id]["previous_responses"] = []
-                    self.active_ruminations[rum_id]["previous_responses"].append(data)
+                    self.active_ruminations[rum_id]["previous_responses"].append(data.get("rumination_text", ""))
             
-            # Update the rumination message with the LLM data
-            rumination_msg.pleasure_change = modulated_response.pleasure_delta
-            rumination_msg.arousal_change = modulated_response.arousal_delta
-            rumination_msg.dominance_change = modulated_response.dominance_delta
+            # Publish the emotional response
+            self.response_publisher.publish(response)
             
-            # Update specific emotion changes
-            rumination_msg.happiness_change = data.get("happiness_change", 0.0)
-            rumination_msg.sadness_change = data.get("sadness_change", 0.0)
-            rumination_msg.anger_change = data.get("anger_change", 0.0)
-            rumination_msg.fear_change = data.get("fear_change", 0.0)
-            rumination_msg.disgust_change = data.get("disgust_change", 0.0)
-            rumination_msg.surprise_change = data.get("surprise_change", 0.0)
+            # Update emotional state
+            self.update_emotional_state(data, rum_id)
             
-            # Update description
-            rumination_msg.description = data.get("description", rumination_msg.description)
-            
-            # Update is_final flag
-            rumination_msg.is_final = data.get("is_final", False)
-            
-            # Publish the updated rumination message
-            self.rumination_publisher.publish(rumination_msg)
-            
-            return modulated_response
+            return response
             
         except Exception as e:
             self.get_logger().error(f"ALAINA: Error creating emotional response: {str(e)}")
             return None
     
     def update_emotional_state(self, llm_data, rum_id):
-        """Update the emotional state through service calls"""
-        # Wait for service to be available
-        if not self.emotion_modify_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().warn("ALAINA: Emotion modify service not available")
-            return False
-        
+        """Update the emotional state based on LLM data"""
         try:
-            # Apply personality modulation to the changes
-            neuroticism = self.personality_model.get_trait_value("neuroticism")
-            # Higher neuroticism amplifies emotional changes from rumination
-            neuroticism_factor = 1.0 + (neuroticism - 0.5) * 0.4
+            # Wait for service to be available with a short timeout
+            if not self.emotion_modify_client.wait_for_service(timeout_sec=1.0):
+                self.get_logger().warn("ALAINA: Emotion modify service not available")
+                return False
             
-            # Create request for pleasure
-            pleasure_change = llm_data.get("pleasure_change", 0.0) * neuroticism_factor
-            if abs(pleasure_change) > 0.01:
+            # Extract emotional impact
+            emotional_impact = llm_data.get("emotional_impact", {})
+            
+            # Update pleasure
+            pleasure_delta = emotional_impact.get("pleasure", 0.0)
+            if pleasure_delta != 0.0:
                 pleasure_request = EmotionModify.Request()
                 pleasure_request.modification_type = "relative"
                 pleasure_request.specific_emotion = "pleasure"
-                pleasure_request.value = pleasure_change
+                pleasure_request.value = pleasure_delta
                 pleasure_request.reason = f"Rumination {rum_id}"
                 pleasure_request.override_safety = False
                 
@@ -669,13 +689,13 @@ Respond ONLY with a valid JSON object in the following format:
                     lambda f: self.emotion_modify_callback(f, rum_id, "pleasure")
                 )
             
-            # Create request for arousal
-            arousal_change = llm_data.get("arousal_change", 0.0) * neuroticism_factor
-            if abs(arousal_change) > 0.01:
+            # Update arousal
+            arousal_delta = emotional_impact.get("arousal", 0.0)
+            if arousal_delta != 0.0:
                 arousal_request = EmotionModify.Request()
                 arousal_request.modification_type = "relative"
                 arousal_request.specific_emotion = "arousal"
-                arousal_request.value = arousal_change
+                arousal_request.value = arousal_delta
                 arousal_request.reason = f"Rumination {rum_id}"
                 arousal_request.override_safety = False
                 
@@ -685,13 +705,13 @@ Respond ONLY with a valid JSON object in the following format:
                     lambda f: self.emotion_modify_callback(f, rum_id, "arousal")
                 )
             
-            # Create request for dominance
-            dominance_change = llm_data.get("dominance_change", 0.0) * neuroticism_factor
-            if abs(dominance_change) > 0.01:
+            # Update dominance
+            dominance_delta = emotional_impact.get("dominance", 0.0)
+            if dominance_delta != 0.0:
                 dominance_request = EmotionModify.Request()
                 dominance_request.modification_type = "relative"
                 dominance_request.specific_emotion = "dominance"
-                dominance_request.value = dominance_change
+                dominance_request.value = dominance_delta
                 dominance_request.reason = f"Rumination {rum_id}"
                 dominance_request.override_safety = False
                 
@@ -700,25 +720,6 @@ Respond ONLY with a valid JSON object in the following format:
                 future.add_done_callback(
                     lambda f: self.emotion_modify_callback(f, rum_id, "dominance")
                 )
-            
-            # Create requests for basic emotions
-            for emotion in ["happiness", "sadness", "anger", "fear", "disgust", "surprise"]:
-                change_field = f"{emotion}_change"
-                if change_field in llm_data:
-                    change = llm_data[change_field] * neuroticism_factor
-                    if abs(change) > 0.01:
-                        request = EmotionModify.Request()
-                        request.modification_type = "relative"
-                        request.specific_emotion = emotion
-                        request.value = change
-                        request.reason = f"Rumination {rum_id}"
-                        request.override_safety = False
-                        
-                        # Send request
-                        future = self.emotion_modify_client.call_async(request)
-                        future.add_done_callback(
-                            lambda f, e=emotion: self.emotion_modify_callback(f, rum_id, e)
-                        )
             
             return True
             
@@ -736,6 +737,67 @@ Respond ONLY with a valid JSON object in the following format:
                 self.get_logger().warn(f"ALAINA: Failed to update {emotion_type} for rumination {rum_id}: {response.error_message}")
         except Exception as e:
             self.get_logger().error(f"ALAINA: Error in emotion modify callback: {str(e)}")
+    
+    def conclude_rumination(self, rum_id, conclusion_reason):
+        """Conclude a rumination process."""
+        self.get_logger().info(f"ALAINA: {conclusion_reason} on {rum_id}")
+        
+        with self.rumination_lock:
+            if rum_id in self.active_ruminations:
+                self.active_ruminations[rum_id]["rumination_msg"].is_final = True
+                self.rumination_publisher.publish(self.active_ruminations[rum_id]["rumination_msg"])
+                del self.active_ruminations[rum_id]
+
+    def parse_llm_response(self, response_text):
+        """Parse the LLM response text to extract structured data"""
+        try:
+            # OpenAI response should be a JSON string already with response_format=json_object
+            data = json.loads(response_text)
+            
+            # Validate required fields
+            required_fields = ["rumination_text", "emotional_impact"]
+            for field in required_fields:
+                if field not in data:
+                    self.get_logger().warn(f"ALAINA: Missing required field in LLM response: {field}")
+                    # If emotional_impact is missing, add default values
+                    if field == "emotional_impact":
+                        data["emotional_impact"] = {
+                            "pleasure": 0.0,
+                            "arousal": 0.0,
+                            "dominance": 0.0,
+                            "primary_emotion": "neutral"
+                        }
+            
+            # If response doesn't have an emotional_impact field, add defaults
+            if not isinstance(data.get("emotional_impact"), dict):
+                data["emotional_impact"] = {
+                    "pleasure": 0.0,
+                    "arousal": 0.0,
+                    "dominance": 0.0,
+                    "primary_emotion": "neutral"
+                }
+            
+            return data
+            
+        except json.JSONDecodeError as e:
+            self.get_logger().error(f"ALAINA: Error parsing LLM response as JSON: {str(e)}")
+            # Fallback: try to extract JSON from text (in case there's extra text)
+            try:
+                import re
+                json_match = re.search(r'({.*})', response_text, re.DOTALL)
+                
+                if json_match:
+                    json_text = json_match.group(1)
+                    return json.loads(json_text)
+                else:
+                    self.get_logger().error(f"ALAINA: Could not find JSON in LLM response: {response_text[:100]}...")
+                    return None
+            except Exception as e2:
+                self.get_logger().error(f"ALAINA: Fallback JSON parsing failed: {str(e2)}")
+                return None
+        except Exception as e:
+            self.get_logger().error(f"ALAINA: Error parsing LLM response: {str(e)}")
+            return None
 
 def main(args=None):
     rclpy.init(args=args)

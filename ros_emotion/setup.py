@@ -32,6 +32,7 @@ setup(
             'visualization_node = ros_emotion.visualization_node:main',
             'test_input_publisher = ros_emotion.test_input_publisher:main',
             'node_lifecycle_manager = ros_emotion.node_lifecycle_manager:main',
+            'feature_flags_manager = ros_emotion.feature_flags_manager:main',
         ],
     },
 ) 

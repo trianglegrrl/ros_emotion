@@ -5,6 +5,12 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='ros_emotion',
+            executable='feature_flags_manager',
+            name='feature_flags_manager',
+            output='screen'
+        ),
+        Node(
+            package='ros_emotion',
             executable='emotional_state_manager',
             name='emotional_state_manager',
             output='screen'
