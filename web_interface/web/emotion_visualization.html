@@ -783,14 +783,29 @@
                 // Handle different message types with specialized formatting
                 switch(topic) {
                     case 'emotional_state':
-                        return `P: ${message.pleasure?.toFixed(2) || 'N/A'}, 
-                                A: ${message.arousal?.toFixed(2) || 'N/A'}, 
-                                D: ${message.dominance?.toFixed(2) || 'N/A'} - 
-                                ${message.description || ''}`;
+                        // Check if values are already strings or if they're numbers
+                        const pleasureVal = typeof message.pleasure === 'number' ? 
+                            message.pleasure.toFixed(2) : 
+                            (message.pleasure || 'N/A');
+                        
+                        const arousalVal = typeof message.arousal === 'number' ? 
+                            message.arousal.toFixed(2) : 
+                            (message.arousal || 'N/A');
+                        
+                        const dominanceVal = typeof message.dominance === 'number' ? 
+                            message.dominance.toFixed(2) : 
+                            (message.dominance || 'N/A');
+                        
+                        return `P: ${pleasureVal}, A: ${arousalVal}, D: ${dominanceVal} - ${message.description || ''}`;
                     
                     case 'rumination_update':
+                        // Also fix intensity formatting to handle string or number
+                        const intensityVal = typeof message.intensity === 'number' ? 
+                            message.intensity.toFixed(2) : 
+                            (message.intensity || 'N/A');
+                        
                         return `${message.is_final ? 'FINAL' : message.rumination_stage} - 
-                                Intensity: ${message.intensity?.toFixed(2) || 'N/A'} - 
+                                Intensity: ${intensityVal} - 
                                 ${message.description || ''}`;
                     
                     case 'sensory_input':
@@ -1302,41 +1317,87 @@
         }
         
         function updateEmotionalStateDisplay(state) {
-            // Add detailed debug messages
-            addDebugMessage(`Updating display with - Pleasure: ${state.pleasure}, Arousal: ${state.arousal}, Dominance: ${state.dominance}`);
-            addDebugMessage(`Emotions - Happiness: ${state.happiness}, Sadness: ${state.sadness}, Anger: ${state.anger}, Fear: ${state.fear}, Disgust: ${state.disgust}, Surprise: ${state.surprise}`);
-            
-            // Don't add to message log for every update (already throttled in subscription)
-            
-            // Update PAD model visualization
-            updatePADVisualization(state.pleasure, state.arousal, state.dominance);
-            
-            // Update emotions chart
-            updateEmotionsChart(state);
-            
-            // Update history chart
-            updateHistoryChart(state);
-            
-            // Update description
-            document.getElementById('emotion-description-text').textContent = 
-                state.description || 'No description available.';
+            try {
+                // Ensure we have a valid state object
+                if (!state) {
+                    addDebugMessage('Warning: Received undefined or null emotional state');
+                    return;
+                }
+                
+                // Convert values to numbers if needed
+                const pleasure = typeof state.pleasure === 'string' ? parseFloat(state.pleasure) : (state.pleasure || 0);
+                const arousal = typeof state.arousal === 'string' ? parseFloat(state.arousal) : (state.arousal || 0);
+                const dominance = typeof state.dominance === 'string' ? parseFloat(state.dominance) : (state.dominance || 0);
+                
+                // Add detailed debug messages
+                addDebugMessage(`Updating display with - Pleasure: ${pleasure}, Arousal: ${arousal}, Dominance: ${dominance}`);
+                
+                // Log all other emotion values if available
+                if (state.happiness !== undefined || state.sadness !== undefined) {
+                    addDebugMessage(`Emotions - Happiness: ${state.happiness || 0}, Sadness: ${state.sadness || 0}, Anger: ${state.anger || 0}, Fear: ${state.fear || 0}, Disgust: ${state.disgust || 0}, Surprise: ${state.surprise || 0}`);
+                }
+                
+                // Update PAD model visualization
+                updatePADVisualization(pleasure, arousal, dominance);
+                
+                // Update emotions chart - ensure all properties exist
+                const emotionState = {
+                    happiness: typeof state.happiness === 'string' ? parseFloat(state.happiness) : (state.happiness || 0),
+                    sadness: typeof state.sadness === 'string' ? parseFloat(state.sadness) : (state.sadness || 0),
+                    anger: typeof state.anger === 'string' ? parseFloat(state.anger) : (state.anger || 0),
+                    fear: typeof state.fear === 'string' ? parseFloat(state.fear) : (state.fear || 0),
+                    disgust: typeof state.disgust === 'string' ? parseFloat(state.disgust) : (state.disgust || 0),
+                    surprise: typeof state.surprise === 'string' ? parseFloat(state.surprise) : (state.surprise || 0),
+                    pleasure: pleasure,
+                    arousal: arousal,
+                    dominance: dominance
+                };
+                
+                // Update emotions chart
+                updateEmotionsChart(emotionState);
+                
+                // Update history chart - use our processed values
+                const historyState = {
+                    pleasure: pleasure,
+                    arousal: arousal,
+                    dominance: dominance
+                };
+                updateHistoryChart(historyState);
+                
+                // Update description
+                document.getElementById('emotion-description-text').textContent = 
+                    state.description || 'No description available.';
+            } catch (e) {
+                console.error('Error updating emotional state display:', e);
+                addDebugMessage(`Error updating display: ${e.message}`);
+            }
         }
         
         function updatePADVisualization(pleasure, arousal, dominance) {
+            // Convert values to numbers if they're strings
+            const pleasureNum = typeof pleasure === 'string' ? parseFloat(pleasure) : pleasure;
+            const arousalNum = typeof arousal === 'string' ? parseFloat(arousal) : arousal;
+            const dominanceNum = typeof dominance === 'string' ? parseFloat(dominance) : dominance;
+            
+            // Handle NaN values
+            const validPleasure = !isNaN(pleasureNum) ? pleasureNum : 0;
+            const validArousal = !isNaN(arousalNum) ? arousalNum : 0;
+            const validDominance = !isNaN(dominanceNum) ? dominanceNum : 0;
+            
             // Display values
-            document.getElementById('pleasure-value').textContent = pleasure.toFixed(2);
-            document.getElementById('arousal-value').textContent = arousal.toFixed(2);
-            document.getElementById('dominance-value').textContent = dominance.toFixed(2);
+            document.getElementById('pleasure-value').textContent = validPleasure.toFixed(2);
+            document.getElementById('arousal-value').textContent = validArousal.toFixed(2);
+            document.getElementById('dominance-value').textContent = validDominance.toFixed(2);
             
             // Update meters
             // Convert from -1,1 range to 0-100% with center at 50%
-            const pleasurePct = (pleasure + 1) * 50;
-            const arousalPct = (arousal + 1) * 50;
-            const dominancePct = (dominance + 1) * 50;
+            const pleasurePct = (validPleasure + 1) * 50;
+            const arousalPct = (validArousal + 1) * 50;
+            const dominancePct = (validDominance + 1) * 50;
             
             // Pleasure fill (green for positive, red for negative)
             const pleasureFill = document.getElementById('pleasure-fill');
-            if (pleasure >= 0) {
+            if (validPleasure >= 0) {
                 pleasureFill.style.left = '50%';
                 pleasureFill.style.width = pleasurePct - 50 + '%';
                 pleasureFill.style.backgroundColor = '#20c997'; // Green
@@ -1348,7 +1409,7 @@
             
             // Arousal fill (orange for high, blue for low)
             const arousalFill = document.getElementById('arousal-fill');
-            if (arousal >= 0) {
+            if (validArousal >= 0) {
                 arousalFill.style.left = '50%';
                 arousalFill.style.width = arousalPct - 50 + '%';
                 arousalFill.style.backgroundColor = '#fd7e14'; // Orange
@@ -1360,7 +1421,7 @@
             
             // Dominance fill (purple for high, yellow for low)
             const dominanceFill = document.getElementById('dominance-fill');
-            if (dominance >= 0) {
+            if (validDominance >= 0) {
                 dominanceFill.style.left = '50%';
                 dominanceFill.style.width = dominancePct - 50 + '%';
                 dominanceFill.style.backgroundColor = '#6f42c1'; // Purple
