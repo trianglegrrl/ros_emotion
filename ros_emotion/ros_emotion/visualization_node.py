@@ -11,6 +11,7 @@ import math
 import numpy as np
 from collections import deque
 import ros_emotion.utils as utils
+from ros_emotion.emotion_model import create_emotion_model
 
 class VisualizationNode(Node):
     def __init__(self):
@@ -19,6 +20,10 @@ class VisualizationNode(Node):
         # Load configuration
         self.config = utils.load_config(self)
         self.viz_config = self.config.get('visualization', {})
+        
+        # Initialize the emotion model
+        emotion_model_type = self.config.get('emotional_state_manager', {}).get('emotion_model_type', 'pad_basic')
+        self.emotion_model = create_emotion_model(emotion_model_type)
         
         # Create QoS profile
         qos = QoSProfile(
@@ -154,18 +159,13 @@ class VisualizationNode(Node):
         """Create markers for the basic emotions visualization."""
         markers = []
         
-        # Define the emotions to visualize
-        emotions = [
-            ("happiness", self.current_emotional_state.happiness),
-            ("sadness", self.current_emotional_state.sadness),
-            ("anger", self.current_emotional_state.anger),
-            ("fear", self.current_emotional_state.fear),
-            ("disgust", self.current_emotional_state.disgust),
-            ("surprise", self.current_emotional_state.surprise)
-        ]
+        # Get the emotions from the emotion model
+        emotions = self.emotion_model.get_all_emotions()
+        emotion_values = [(emotion, self.emotion_model.get_emotion_value(self.current_emotional_state, emotion)) 
+                          for emotion in emotions]
         
         # Create a bar for each emotion
-        for i, (emotion, value) in enumerate(emotions):
+        for i, (emotion, value) in enumerate(emotion_values):
             marker = Marker()
             marker.header.frame_id = "emotion_frame"
             marker.header.stamp = self.get_clock().now().to_msg()
@@ -187,7 +187,7 @@ class VisualizationNode(Node):
             marker.scale.y = 0.2  # Height
             marker.scale.z = 0.1  # Depth
             
-            # Color based on emotion
+            # Color based on emotion using the emotion model
             marker.color = self.get_emotion_specific_color(emotion)
             
             # Don't auto-delete
@@ -199,14 +199,14 @@ class VisualizationNode(Node):
             text_marker = Marker()
             text_marker.header.frame_id = "emotion_frame"
             text_marker.header.stamp = self.get_clock().now().to_msg()
-            text_marker.ns = "emotion_labels"
+            text_marker.ns = "basic_emotions_text"
             text_marker.id = i
             text_marker.type = Marker.TEXT_VIEW_FACING
             text_marker.action = Marker.ADD
             
             # Position (next to bar)
-            text_marker.pose.position.x = 1.7  # Offset from bar
-            text_marker.pose.position.y = i * 0.3 - 0.75  # Same as bar
+            text_marker.pose.position.x = 2.0 + value * 0.5 + 0.1  # Just after the bar
+            text_marker.pose.position.y = i * 0.3 - 0.75  # Same vertical position as bar
             text_marker.pose.position.z = 0.0
             
             # Orientation (identity quaternion)
@@ -215,13 +215,10 @@ class VisualizationNode(Node):
             # Size (text height)
             text_marker.scale.z = 0.1  # Text height
             
-            # Color (white)
-            text_marker.color.r = 1.0
-            text_marker.color.g = 1.0
-            text_marker.color.b = 1.0
-            text_marker.color.a = 1.0
+            # Color (same as bar)
+            text_marker.color = self.get_emotion_specific_color(emotion)
             
-            # Text
+            # Text (emotion name and value)
             text_marker.text = f"{emotion}: {value:.2f}"
             
             # Don't auto-delete
@@ -402,38 +399,16 @@ class VisualizationNode(Node):
         return color
     
     def get_emotion_specific_color(self, emotion):
-        """Get a color for a specific emotion."""
+        """Get a color for a specific emotion using the emotion model."""
+        # Get the color from the emotion model
+        model_color = self.emotion_model.get_emotion_color(emotion)
+        
+        # Convert to ColorRGBA
         color = ColorRGBA()
         color.a = 1.0
-        
-        if emotion == "happiness":
-            color.r = 1.0
-            color.g = 1.0
-            color.b = 0.0
-        elif emotion == "sadness":
-            color.r = 0.0
-            color.g = 0.0
-            color.b = 1.0
-        elif emotion == "anger":
-            color.r = 1.0
-            color.g = 0.0
-            color.b = 0.0
-        elif emotion == "fear":
-            color.r = 0.5
-            color.g = 0.0
-            color.b = 0.5
-        elif emotion == "disgust":
-            color.r = 0.0
-            color.g = 0.5
-            color.b = 0.0
-        elif emotion == "surprise":
-            color.r = 1.0
-            color.g = 0.5
-            color.b = 0.0
-        else:
-            color.r = 0.5
-            color.g = 0.5
-            color.b = 0.5
+        color.r = model_color[0]
+        color.g = model_color[1]
+        color.b = model_color[2]
         
         return color
 
