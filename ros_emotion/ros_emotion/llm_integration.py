@@ -57,7 +57,7 @@ class LLMIntegration(Node):
         # Service client for modifying emotional state
         self.emotion_modify_client = self.create_client(
             EmotionModify,
-            'emotion_modify'
+            '/modify_emotional_state'
         )
         
         # Store the current emotional state
@@ -131,15 +131,35 @@ class LLMIntegration(Node):
     
     def build_sensory_processing_prompt(self, sensory_input):
         """Build a prompt for the LLM to process sensory input"""
-        # Format the current emotional state
+        # Format the current emotional state using fields that actually exist
         current_state = {
             "pleasure": self.current_emotional_state.pleasure,
             "arousal": self.current_emotional_state.arousal,
             "dominance": self.current_emotional_state.dominance,
-            "primary_emotion": self.current_emotional_state.primary_emotion,
-            "secondary_emotion": self.current_emotional_state.secondary_emotion,
-            "intensity": self.current_emotional_state.intensity
+            "happiness": self.current_emotional_state.happiness,
+            "sadness": self.current_emotional_state.sadness,
+            "anger": self.current_emotional_state.anger,
+            "fear": self.current_emotional_state.fear,
+            "disgust": self.current_emotional_state.disgust,
+            "surprise": self.current_emotional_state.surprise,
+            "intensity": self.current_emotional_state.intensity,
+            "description": self.current_emotional_state.description if hasattr(self.current_emotional_state, 'description') else ""
         }
+        
+        # Determine current primary emotion based on basic emotion values
+        emotions = {
+            "happiness": self.current_emotional_state.happiness,
+            "sadness": self.current_emotional_state.sadness,
+            "anger": self.current_emotional_state.anger,
+            "fear": self.current_emotional_state.fear,
+            "disgust": self.current_emotional_state.disgust,
+            "surprise": self.current_emotional_state.surprise
+        }
+        current_primary_emotion = max(emotions.items(), key=lambda x: x[1])[0]
+        self.get_logger().info(f"ALAINA: Current primary emotion: {current_primary_emotion}")
+        
+        # Add primary emotion to the state
+        current_state["primary_emotion"] = current_primary_emotion
         
         # Build the prompt
         prompt = f"""You are the emotional processing system for a robot. 
@@ -160,16 +180,18 @@ Based on this information, determine:
 2. What should be the primary emotion after this input?
 3. What should be the response text that explains this change?
 
+IMPORTANT: You MUST use one of these exact emotion names: happiness, sadness, anger, fear, disgust, surprise
+
 Respond ONLY with a valid JSON object in the following format:
-{
+{{
   "pleasure_delta": float (-1.0 to 1.0),
   "arousal_delta": float (-1.0 to 1.0),
   "dominance_delta": float (-1.0 to 1.0),
-  "primary_emotion": string,
+  "primary_emotion": string (one of: "happiness", "sadness", "anger", "fear", "disgust", "surprise"),
   "intensity": float (0.0 to 1.0),
   "confidence": float (0.0 to 1.0),
   "response_text": string
-}"""
+}}"""
         
         return prompt
     
@@ -189,18 +211,29 @@ Respond ONLY with a valid JSON object in the following format:
             
             self.get_logger().info("ALAINA: Simulating LLM API call (would connect to real API in production)")
             
-            # Simulate API response (for demo purposes)
-            # In production, this would be: response = requests.post(f"{self.api_base_url}/completions", json=payload, headers={"Authorization": f"Bearer {self.api_key}"})
+            # Extract description if possible, or use default
+            description = "input"
+            try:
+                desc_start = prompt.find("Description: ")
+                if desc_start != -1:
+                    desc_start += len("Description: ")
+                    desc_end = prompt.find("\n", desc_start)
+                    if desc_end != -1:
+                        description = prompt[desc_start:desc_end]
+                    else:
+                        description = prompt[desc_start:]
+            except:
+                pass
             
             # Mock response for demonstration
             return json.dumps({
                 "pleasure_delta": 0.2 if "friendly" in prompt or "happy" in prompt else -0.2,
                 "arousal_delta": 0.3 if "exciting" in prompt or "surprising" in prompt else -0.1,
                 "dominance_delta": 0.1 if "control" in prompt or "mastery" in prompt else -0.1,
-                "primary_emotion": "joy" if "friendly" in prompt or "happy" in prompt else "sadness",
+                "primary_emotion": "happiness" if "friendly" in prompt or "happy" in prompt else "sadness",
                 "intensity": 0.7,
                 "confidence": 0.8,
-                "response_text": f"Processing sensory input: {prompt.split('Description: ')[1].split('\n')[0]}"
+                "response_text": f"Processing sensory input: {description}"
             })
             
         except Exception as e:
@@ -247,23 +280,64 @@ Respond ONLY with a valid JSON object in the following format:
         while not self.emotion_modify_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('ALAINA: Waiting for emotion_modify service...')
         
-        # Create service request
-        request = EmotionModify.Request()
-        request.pleasure_delta = llm_response.get("pleasure_delta", 0.0)
-        request.arousal_delta = llm_response.get("arousal_delta", 0.0)
-        request.dominance_delta = llm_response.get("dominance_delta", 0.0)
-        request.primary_emotion = llm_response.get("primary_emotion", "neutral")
-        request.intensity = llm_response.get("intensity", 0.5)
+        # Create service request for pleasure
+        pleasure_request = EmotionModify.Request()
+        pleasure_request.modification_type = "relative"
+        pleasure_request.specific_emotion = "pleasure"
+        pleasure_request.value = llm_response.get("pleasure_delta", 0.0)
+        pleasure_request.reason = f"Sensory input: {original_input.description if original_input else 'rumination'}"
+        pleasure_request.override_safety = False
         
-        # Call service
-        future = self.emotion_modify_client.call_async(request)
-        future.add_done_callback(lambda f: self.emotion_modify_callback(f, input_id))
+        # Call service for pleasure
+        pleasure_future = self.emotion_modify_client.call_async(pleasure_request)
+        
+        # Create service request for arousal
+        arousal_request = EmotionModify.Request()
+        arousal_request.modification_type = "relative"
+        arousal_request.specific_emotion = "arousal"
+        arousal_request.value = llm_response.get("arousal_delta", 0.0)
+        arousal_request.reason = f"Sensory input: {original_input.description if original_input else 'rumination'}"
+        arousal_request.override_safety = False
+        
+        # Call service for arousal
+        arousal_future = self.emotion_modify_client.call_async(arousal_request)
+        
+        # Create service request for dominance
+        dominance_request = EmotionModify.Request()
+        dominance_request.modification_type = "relative"
+        dominance_request.specific_emotion = "dominance"
+        dominance_request.value = llm_response.get("dominance_delta", 0.0)
+        dominance_request.reason = f"Sensory input: {original_input.description if original_input else 'rumination'}"
+        dominance_request.override_safety = False
+        
+        # Call service for dominance
+        dominance_future = self.emotion_modify_client.call_async(dominance_request)
+        
+        # Create service request for primary emotion
+        emotion_request = EmotionModify.Request()
+        emotion_request.modification_type = "specific"
+        emotion_request.specific_emotion = llm_response.get("primary_emotion", "neutral")
+        emotion_request.value = llm_response.get("intensity", 0.5)
+        emotion_request.reason = f"Sensory input: {original_input.description if original_input else 'rumination'}"
+        emotion_request.override_safety = False
+        
+        # Call service for primary emotion
+        emotion_future = self.emotion_modify_client.call_async(emotion_request)
+        
+        # Add callbacks
+        pleasure_future.add_done_callback(lambda f: self.emotion_modify_callback(f, input_id, "pleasure"))
+        arousal_future.add_done_callback(lambda f: self.emotion_modify_callback(f, input_id, "arousal"))
+        dominance_future.add_done_callback(lambda f: self.emotion_modify_callback(f, input_id, "dominance"))
+        emotion_future.add_done_callback(lambda f: self.emotion_modify_callback(f, input_id, "primary_emotion"))
     
-    def emotion_modify_callback(self, future, input_id):
+    def emotion_modify_callback(self, future, input_id, emotion_type):
         """Callback for emotion modify service response"""
         try:
             response = future.result()
-            self.get_logger().info(f"ALAINA: Emotional state updated successfully for {input_id}")
+            if response.success:
+                self.get_logger().info(f"ALAINA: Emotional state ({emotion_type}) updated successfully for {input_id}")
+            else:
+                self.get_logger().error(f"ALAINA: Failed to update emotional state ({emotion_type}) for {input_id}: {response.error_message}")
         except Exception as e:
             self.get_logger().error(f"ALAINA: Service call failed: {str(e)}")
     

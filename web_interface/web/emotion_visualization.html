@@ -222,6 +222,129 @@
         .message-item.rumination {
             border-left-color: #6f42c1;
         }
+        
+        /* Message History Styles */
+        .message-history-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .message-history-nav {
+            display: flex;
+            margin-bottom: 10px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .message-history-nav button {
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .message-history-nav button:hover {
+            background-color: #dee2e6;
+        }
+        
+        .message-history-nav button.active {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .message-history-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background-color: white;
+        }
+        
+        .message-history-toolbar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .message-history-search {
+            flex-grow: 1;
+            max-width: 300px;
+        }
+        
+        .message-history-search input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        
+        .message-history-filter select {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        
+        .message-history-pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+            gap: 5px;
+        }
+        
+        .message-history-pagination button {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #dee2e6;
+            background-color: white;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .message-history-pagination button:hover {
+            background-color: #e9ecef;
+        }
+        
+        .message-history-pagination button.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .message-history-counter {
+            font-size: 0.9em;
+            color: #6c757d;
+            text-align: right;
+            margin-top: 5px;
+        }
+        
+        .history-topic {
+            font-weight: bold;
+            color: #495057;
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        
+        .export-button {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .clear-button {
+            background-color: #dc3545;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -309,6 +432,37 @@
             </div>
         </div>
         
+        <div class="message-history-container">
+            <h3>Message History</h3>
+            <div class="message-history-toolbar">
+                <div class="message-history-search">
+                    <input type="text" id="historySearchInput" placeholder="Search messages...">
+                </div>
+                <div class="message-history-filter">
+                    <select id="historyTopicFilter">
+                        <option value="all">All Topics</option>
+                        <option value="sensory_input">Sensory Input</option>
+                        <option value="emotional_state">Emotional State</option>
+                        <option value="rumination_update">Rumination</option>
+                        <option value="emotional_response">Emotional Response</option>
+                    </select>
+                </div>
+                <button id="exportHistory" class="export-button">Export</button>
+                <button id="clearHistory" class="clear-button">Clear</button>
+            </div>
+            <div class="message-history-nav">
+                <button class="history-tab active" data-tab="all">All Messages</button>
+                <button class="history-tab" data-tab="sensory_input">Sensory Input</button>
+                <button class="history-tab" data-tab="emotional_state">Emotional State</button>
+                <button class="history-tab" data-tab="rumination_update">Ruminations</button>
+                <button class="history-tab" data-tab="emotional_response">Emotional Responses</button>
+                <button class="history-tab" data-tab="completed_ruminations">Completed Ruminations</button>
+            </div>
+            <div class="message-history-list" id="messageHistoryList"></div>
+            <div class="message-history-pagination" id="historyPagination"></div>
+            <div class="message-history-counter" id="historyCounter">Showing 0 of 0 messages</div>
+        </div>
+        
         <div class="debug-info">
             <h3>Debug Information</h3>
             <div id="debugInfo"></div>
@@ -338,6 +492,29 @@
         // Active ruminations
         const activeRuminations = {};
         
+        // Completed ruminations
+        const completedRuminations = [];
+        
+        // Message history storage - store up to 10000 messages per topic
+        const MAX_HISTORY_SIZE = 10000;
+        const messageHistory = {
+            all: [],
+            sensory_input: [],
+            emotional_state: [], 
+            rumination_update: [],
+            emotional_response: [],
+            completed_ruminations: []
+        };
+        
+        // Current view settings for message history
+        const historyView = {
+            currentTab: 'all',
+            currentPage: 1,
+            messagesPerPage: 50,
+            searchTerm: '',
+            filteredMessages: []
+        };
+        
         function addDebugMessage(message) {
             const debugInfo = document.getElementById('debugInfo');
             const timestamp = new Date().toISOString();
@@ -361,10 +538,425 @@
             // Auto-scroll to bottom
             messageLog.scrollTop = messageLog.scrollHeight;
             
-            // Keep only the latest 20 messages
+            // Keep only the latest 20 messages in the visible log
             if (messageLog.childNodes.length > 20) {
                 messageLog.removeChild(messageLog.firstChild);
             }
+            
+            // Add to full message history
+            const historyItem = {
+                timestamp: new Date(),
+                message: message,
+                type: type,
+                formattedTime: timestamp
+            };
+            
+            // Add to the appropriate history arrays
+            messageHistory.all.unshift(historyItem);
+            if (messageHistory.all.length > MAX_HISTORY_SIZE) {
+                messageHistory.all.pop();
+            }
+            
+            // Add to type-specific history
+            if (messageHistory[type]) {
+                messageHistory[type].unshift(historyItem);
+                if (messageHistory[type].length > MAX_HISTORY_SIZE) {
+                    messageHistory[type].pop();
+                }
+            }
+            
+            // Update the history view if it's currently open
+            updateMessageHistoryView();
+            
+            // Save to localStorage
+            saveMessageHistory();
+        }
+        
+        function storeMessageInHistory(topic, message) {
+            const timestamp = new Date();
+            const historyItem = {
+                timestamp: timestamp,
+                formattedTime: timestamp.toLocaleTimeString(),
+                topic: topic,
+                message: message
+            };
+            
+            // Add to the all history array
+            messageHistory.all.unshift(historyItem);
+            if (messageHistory.all.length > MAX_HISTORY_SIZE) {
+                messageHistory.all.pop();
+            }
+            
+            // Add to topic-specific history - create it if it doesn't exist
+            if (!messageHistory[topic]) {
+                messageHistory[topic] = [];
+            }
+            
+            messageHistory[topic].unshift(historyItem);
+            if (messageHistory[topic].length > MAX_HISTORY_SIZE) {
+                messageHistory[topic].pop();
+            }
+            
+            // Update the history view if it's currently open
+            updateMessageHistoryView();
+            
+            // Save to localStorage every 100 messages (to reduce performance impact)
+            // And only store a subset of topics to avoid exceeding quota
+            if (messageHistory.all.length % 100 === 0) {
+                saveMessageHistory();
+            }
+        }
+        
+        function saveMessageHistory() {
+            try {
+                // Only save essential topics to localStorage to avoid quota errors
+                const essentialTopics = ['sensory_input', 'emotional_state', 'rumination_update', 'emotional_response', 'completed_ruminations'];
+                const storageData = {
+                    all: messageHistory.all.slice(0, 500) // Only store last 500 of all messages
+                };
+                
+                // Add the essential topics
+                essentialTopics.forEach(topicKey => {
+                    if (messageHistory[topicKey]) {
+                        storageData[topicKey] = messageHistory[topicKey].slice(0, 100); // Only 100 messages per topic
+                    }
+                });
+                
+                // Try to save, but don't break if it fails
+                localStorage.setItem('rosEmotionMessageHistory', JSON.stringify(storageData));
+                addDebugMessage('Saved message history subset to localStorage');
+                return true;
+            } catch (e) {
+                console.error('Failed to save message history to localStorage:', e);
+                addDebugMessage('Note: Not saving to localStorage due to quota limits');
+                
+                // If we got a quota error, clear some existing data to make room
+                try {
+                    // Try to clear less important data
+                    localStorage.removeItem('rosEmotionMessageHistory');
+                    addDebugMessage('Cleared existing history from localStorage to make room');
+                } catch (clearError) {
+                    console.error('Failed to clear localStorage:', clearError);
+                }
+                return false;
+            }
+        }
+        
+        function loadMessageHistory() {
+            try {
+                const stored = localStorage.getItem('rosEmotionMessageHistory');
+                if (stored) {
+                    const loaded = JSON.parse(stored);
+                    for (const topic in loaded) {
+                        if (messageHistory[topic]) {
+                            messageHistory[topic] = loaded[topic];
+                        }
+                    }
+                    addDebugMessage('Loaded message history from localStorage');
+                    updateMessageHistoryView();
+                }
+            } catch (e) {
+                console.error('Failed to load message history:', e);
+                addDebugMessage('Failed to load message history: ' + e.message);
+            }
+        }
+        
+        function updateMessageHistoryView() {
+            const historyList = document.getElementById('messageHistoryList');
+            const pagination = document.getElementById('historyPagination');
+            const counter = document.getElementById('historyCounter');
+            const searchTerm = document.getElementById('historySearchInput').value.toLowerCase();
+            
+            // Filter messages based on current tab and search term
+            historyView.filteredMessages = messageHistory[historyView.currentTab].filter(item => {
+                if (!searchTerm) return true;
+                
+                // Search in the message content
+                if (typeof item.message === 'string' && item.message.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // For object messages, stringify them for searching
+                if (typeof item.message === 'object') {
+                    const stringified = JSON.stringify(item.message);
+                    return stringified.toLowerCase().includes(searchTerm);
+                }
+                
+                return false;
+            });
+            
+            // Calculate pagination
+            const totalMessages = historyView.filteredMessages.length;
+            const totalPages = Math.ceil(totalMessages / historyView.messagesPerPage);
+            
+            // Adjust current page if out of bounds
+            if (historyView.currentPage > totalPages) {
+                historyView.currentPage = Math.max(1, totalPages);
+            }
+            
+            // Get current page of messages
+            const startIdx = (historyView.currentPage - 1) * historyView.messagesPerPage;
+            const endIdx = Math.min(startIdx + historyView.messagesPerPage, totalMessages);
+            const displayedMessages = historyView.filteredMessages.slice(startIdx, endIdx);
+            
+            // Update counter
+            counter.textContent = `Showing ${startIdx + 1}-${endIdx} of ${totalMessages} messages`;
+            
+            // Clear list
+            historyList.innerHTML = '';
+            
+            // Display messages
+            let lastTopic = null;
+            
+            displayedMessages.forEach(item => {
+                // Add topic header if topic changes or if viewing "all" tab
+                if (historyView.currentTab === 'all' && item.topic !== lastTopic) {
+                    const topicHeader = document.createElement('div');
+                    topicHeader.className = 'history-topic';
+                    topicHeader.textContent = formatTopicName(item.topic || 'unknown');
+                    historyList.appendChild(topicHeader);
+                    lastTopic = item.topic;
+                }
+                
+                const msgElement = document.createElement('div');
+                msgElement.className = `message-item ${item.type || ''}`;
+                
+                let messageContent;
+                if (typeof item.message === 'string') {
+                    messageContent = item.message;
+                } else {
+                    // For object messages, display in a readable format
+                    messageContent = formatMessage(item.topic, item.message);
+                }
+                
+                msgElement.innerHTML = `<strong>[${item.formattedTime}]</strong>: ${messageContent}`;
+                historyList.appendChild(msgElement);
+            });
+            
+            // If no messages
+            if (displayedMessages.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.className = 'message-item';
+                emptyMsg.textContent = 'No messages found.';
+                historyList.appendChild(emptyMsg);
+            }
+            
+            // Update pagination
+            updatePagination(pagination, totalPages);
+        }
+        
+        function formatTopicName(topic) {
+            // Convert camelCase or snake_case to Title Case with Spaces
+            return topic
+                .replace(/_/g, ' ')
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase())
+                .trim();
+        }
+        
+        function formatMessage(topic, message) {
+            if (!message) return 'Empty message';
+            
+            try {
+                // Handle different message types with specialized formatting
+                switch(topic) {
+                    case 'emotional_state':
+                        return `P: ${message.pleasure?.toFixed(2) || 'N/A'}, 
+                                A: ${message.arousal?.toFixed(2) || 'N/A'}, 
+                                D: ${message.dominance?.toFixed(2) || 'N/A'} - 
+                                ${message.description || ''}`;
+                    
+                    case 'rumination_update':
+                        return `${message.is_final ? 'FINAL' : message.rumination_stage} - 
+                                Intensity: ${message.intensity?.toFixed(2) || 'N/A'} - 
+                                ${message.description || ''}`;
+                    
+                    case 'sensory_input':
+                        return `${message.input_type || ''}: ${message.description || ''}`;
+                    
+                    case 'emotional_response':
+                        return `${message.is_rumination ? 'Rumination' : 'Response'}: ${message.response_text || ''}`;
+                    
+                    default:
+                        // For unknown message types, try to find common fields
+                        if (message.data !== undefined) {
+                            return `Data: ${typeof message.data === 'object' ? JSON.stringify(message.data) : message.data}`;
+                        }
+                        
+                        if (message.msg !== undefined) {
+                            return `Message: ${typeof message.msg === 'object' ? JSON.stringify(message.msg) : message.msg}`;
+                        }
+                        
+                        if (message.text !== undefined) {
+                            return `Text: ${message.text}`;
+                        }
+                        
+                        if (message.description !== undefined) {
+                            return `Description: ${message.description}`;
+                        }
+                        
+                        // Generic object formatting
+                        const str = JSON.stringify(message);
+                        return str.length > 500 ? str.substring(0, 500) + '...' : str;
+                }
+            } catch (e) {
+                console.error('Error formatting message:', e);
+                return `Error formatting message: ${e.message}`;
+            }
+        }
+        
+        function updatePagination(paginationElement, totalPages) {
+            paginationElement.innerHTML = '';
+            
+            // No pagination needed for 0 or 1 page
+            if (totalPages <= 1) return;
+            
+            // Add first page button
+            const firstBtn = document.createElement('button');
+            firstBtn.textContent = '«';
+            firstBtn.addEventListener('click', () => {
+                historyView.currentPage = 1;
+                updateMessageHistoryView();
+            });
+            paginationElement.appendChild(firstBtn);
+            
+            // Add previous button
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '‹';
+            prevBtn.addEventListener('click', () => {
+                if (historyView.currentPage > 1) {
+                    historyView.currentPage--;
+                    updateMessageHistoryView();
+                }
+            });
+            paginationElement.appendChild(prevBtn);
+            
+            // Calculate which page buttons to show
+            let startPage = Math.max(1, historyView.currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            
+            // Adjust start if we're near the end
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+            
+            // Add page buttons
+            for (let i = startPage; i <= endPage; i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.textContent = i;
+                if (i === historyView.currentPage) {
+                    pageBtn.className = 'active';
+                }
+                pageBtn.addEventListener('click', () => {
+                    historyView.currentPage = i;
+                    updateMessageHistoryView();
+                });
+                paginationElement.appendChild(pageBtn);
+            }
+            
+            // Add next button
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = '›';
+            nextBtn.addEventListener('click', () => {
+                if (historyView.currentPage < totalPages) {
+                    historyView.currentPage++;
+                    updateMessageHistoryView();
+                }
+            });
+            paginationElement.appendChild(nextBtn);
+            
+            // Add last page button
+            const lastBtn = document.createElement('button');
+            lastBtn.textContent = '»';
+            lastBtn.addEventListener('click', () => {
+                historyView.currentPage = totalPages;
+                updateMessageHistoryView();
+            });
+            paginationElement.appendChild(lastBtn);
+        }
+        
+        function exportMessageHistory() {
+            try {
+                // Create a full export of all message history
+                const exportData = {
+                    exportDate: new Date().toISOString(),
+                    messageHistory: messageHistory
+                };
+                
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `ros_emotion_history_${new Date().toISOString().split('T')[0]}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                document.body.removeChild(downloadAnchor);
+                
+                addDebugMessage('Message history exported successfully');
+            } catch (e) {
+                console.error('Failed to export message history:', e);
+                addDebugMessage('Failed to export message history: ' + e.message);
+                
+                // If the JSON export is too large, offer the raw text version instead
+                if (e.toString().includes('Maximum call stack size exceeded') || 
+                    e.toString().includes('overflow') ||
+                    e.toString().includes('quota')) {
+                    addDebugMessage('History too large for JSON export, try using "Save Raw Data" instead');
+                    alert('The message history is too large for a JSON export. Please use the "Save Raw Data" button instead.');
+                }
+            }
+        }
+        
+        function clearMessageHistory() {
+            if (confirm('Are you sure you want to clear all message history? This cannot be undone.')) {
+                for (const topic in messageHistory) {
+                    messageHistory[topic] = [];
+                }
+                
+                // Update view
+                updateMessageHistoryView();
+                
+                // Clear localStorage
+                localStorage.removeItem('rosEmotionMessageHistory');
+                
+                addDebugMessage('Message history cleared');
+            }
+        }
+        
+        function resetConnection() {
+            addDebugMessage('Resetting connection...');
+            
+            // Close existing connection
+            if (ros) {
+                ros.close();
+            }
+            
+            // Clear any existing subscriptions
+            if (emotionalStateSubscription) {
+                emotionalStateSubscription.unsubscribe();
+                emotionalStateSubscription = null;
+            }
+            
+            if (ruminationSubscription) {
+                ruminationSubscription.unsubscribe();
+                ruminationSubscription = null;
+            }
+            
+            if (emotionalResponseSubscription) {
+                emotionalResponseSubscription.unsubscribe();
+                emotionalResponseSubscription = null;
+            }
+            
+            // Update status
+            document.getElementById('status').className = 'status disconnected';
+            document.getElementById('status').innerHTML = 'Disconnected from ROS';
+            
+            // Reconnect after a short delay
+            setTimeout(function() {
+                const wsUrl = document.getElementById('wsUrlInput').value;
+                initRosConnection(wsUrl);
+            }, 1000);
+            
+            addDebugMessage('Connection reset initiated');
         }
         
         function initRosConnection(wsUrl) {
@@ -399,6 +991,9 @@
                 document.getElementById('status').className = 'status connected';
                 document.getElementById('status').innerHTML = 'Connected to ROS';
                 
+                // Log the URL for debugging
+                addDebugMessage(`Connected to WebSocket URL: ${wsUrl}`);
+                
                 // Setup publishers
                 setupPublishers();
                 
@@ -410,12 +1005,27 @@
                 
                 // Subscribe to emotional responses
                 subscribeToEmotionalResponses();
+                
+                // Subscribe to ALL topics for complete message monitoring
+                subscribeToAllTopics();
+                
+                // Test that we can access the ROS graph
+                try {
+                    ros.getTopics(function(topics) {
+                        addDebugMessage(`Available topics: ${topics.topics.join(', ')}`);
+                    });
+                } catch (e) {
+                    addDebugMessage(`Error getting topics: ${e}`);
+                }
             });
 
             ros.on('error', function(error) {
                 addDebugMessage(`Error connecting to websocket server: ${error}`);
                 document.getElementById('status').className = 'status disconnected';
                 document.getElementById('status').innerHTML = 'Error connecting to ROS';
+                
+                // More detailed error message
+                addDebugMessage(`Connection error details: ${JSON.stringify(error)}`);
             });
 
             ros.on('close', function() {
@@ -448,8 +1058,26 @@
             }
             
             const message = new ROSLIB.Message({
-                input_text: inputText,
-                timestamp: new Date().toISOString()
+                timestamp: {
+                    sec: Math.floor(Date.now() / 1000),
+                    nanosec: (Date.now() % 1000) * 1000000
+                },
+                input_type: 'text',
+                description: inputText,
+                raw_data: '',
+                source: 'web_interface',
+                intensity: 0.8,
+                priority: 0.7,
+                confidence: 0.9,
+                metadata: '{}'
+            });
+            
+            // Store in message history before sending
+            storeMessageInHistory('sensory_input', {
+                input_type: 'text',
+                description: inputText,
+                source: 'web_interface',
+                intensity: 0.8
             });
             
             sensoryInputPublisher.publish(message);
@@ -471,6 +1099,28 @@
             
             emotionalStateSubscription.subscribe(function(message) {
                 addDebugMessage('Received emotional state update');
+                
+                // Don't store full emotional state in message history - too much data
+                // Instead, store a simplified version with just the key metrics
+                const simplifiedState = {
+                    timestamp: new Date(),
+                    pleasure: message.pleasure.toFixed(2),
+                    arousal: message.arousal.toFixed(2),
+                    dominance: message.dominance.toFixed(2),
+                    description: message.description || 'No description'
+                };
+                
+                // Only store simplified version in message history occasionally (once every 5 seconds)
+                const now = Date.now();
+                if (!window.lastEmotionalStateStored || now - window.lastEmotionalStateStored > 5000) {
+                    storeMessageInHistory('emotional_state', simplifiedState);
+                    window.lastEmotionalStateStored = now;
+                    
+                    // Add to message log
+                    addMessageToLog(`Emotional state updated - P:${message.pleasure.toFixed(2)}, A:${message.arousal.toFixed(2)}, D:${message.dominance.toFixed(2)}`, 'state-change');
+                }
+                
+                // Always update the display
                 updateEmotionalStateDisplay(message);
             });
         }
@@ -486,6 +1136,9 @@
             
             emotionalResponseSubscription.subscribe(function(message) {
                 addDebugMessage('Received emotional response');
+                
+                // Store in message history
+                storeMessageInHistory('emotional_response', message);
                 
                 // Add to message log
                 if (message.is_rumination) {
@@ -507,11 +1160,124 @@
             
             ruminationSubscription.subscribe(function(message) {
                 addDebugMessage('Received rumination update');
+                
+                // Store in message history
+                storeMessageInHistory('rumination_update', message);
+                
                 updateRuminationDisplay(message);
             });
         }
         
+        function subscribeToAllTopics() {
+            addDebugMessage('Setting up subscriptions to all topics for message history tracking');
+            
+            // First get the list of all available topics
+            ros.getTopics(function(result) {
+                const topics = result.topics;
+                const types = result.types;
+                
+                addDebugMessage(`Found ${topics.length} topics to monitor`);
+                
+                // Create a mapping of existing topic categories
+                const topicCategories = {
+                    '/emotional_state': 'emotional_state',
+                    '/rumination_update': 'rumination_update',
+                    '/emotional_response': 'emotional_response',
+                    '/sensory_input': 'sensory_input'
+                };
+                
+                // List of topics to exclude from history to save space
+                const excludedTopics = [
+                    // Skip high-frequency topics that generate a lot of data
+                    '/rosout',
+                    '/parameter_events', 
+                    '/clock',
+                    // Add other topics that you don't need to log
+                ];
+                
+                // For each topic, subscribe and log messages
+                topics.forEach((topic, index) => {
+                    // Skip topics we already have specialized handling for
+                    if (topicCategories[topic]) {
+                        addDebugMessage(`Skipping specialized topic: ${topic}`);
+                        return;
+                    }
+                    
+                    // Skip excluded topics
+                    if (excludedTopics.includes(topic)) {
+                        addDebugMessage(`Skipping excluded topic: ${topic}`);
+                        return;
+                    }
+                    
+                    // Create a new section in message history for this topic if not exists
+                    const topicKey = topic.replace(/\//g, '_').substring(1); // Remove leading slash
+                    if (!messageHistory[topicKey]) {
+                        messageHistory[topicKey] = [];
+                        
+                        // Also add a button in the UI for this topic
+                        const historyNav = document.querySelector('.message-history-nav');
+                        const topicButton = document.createElement('button');
+                        topicButton.className = 'history-tab';
+                        topicButton.dataset.tab = topicKey;
+                        topicButton.textContent = formatTopicName(topicKey);
+                        topicButton.addEventListener('click', function() {
+                            document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+                            this.classList.add('active');
+                            historyView.currentTab = topicKey;
+                            historyView.currentPage = 1;
+                            updateMessageHistoryView();
+                        });
+                        historyNav.appendChild(topicButton);
+                        
+                        // Add option to the filter dropdown
+                        const topicFilter = document.getElementById('historyTopicFilter');
+                        const option = document.createElement('option');
+                        option.value = topicKey;
+                        option.textContent = formatTopicName(topicKey);
+                        topicFilter.appendChild(option);
+                    }
+                    
+                    try {
+                        // Subscribe to the topic
+                        const subscription = new ROSLIB.Topic({
+                            ros: ros,
+                            name: topic,
+                            messageType: types[index]
+                        });
+                        
+                        // Add throttling for high-frequency topics
+                        let lastMessageTime = 0;
+                        
+                        subscription.subscribe(function(message) {
+                            const now = Date.now();
+                            // Only store a message from this topic every 2 seconds at most
+                            if (now - lastMessageTime > 2000) {
+                                // Store in message history
+                                storeMessageInHistory(topicKey, message);
+                                lastMessageTime = now;
+                                
+                                // Add debug message for the first few messages from each topic
+                                if (messageHistory[topicKey].length <= 5) {
+                                    addDebugMessage(`Received message on topic: ${topic}`);
+                                }
+                            }
+                        });
+                        
+                        addDebugMessage(`Subscribed to topic: ${topic} (${types[index]})`);
+                    } catch (e) {
+                        addDebugMessage(`Error subscribing to topic ${topic}: ${e.message}`);
+                    }
+                });
+            });
+        }
+        
         function updateEmotionalStateDisplay(state) {
+            // Add detailed debug messages
+            addDebugMessage(`Updating display with - Pleasure: ${state.pleasure}, Arousal: ${state.arousal}, Dominance: ${state.dominance}`);
+            addDebugMessage(`Emotions - Happiness: ${state.happiness}, Sadness: ${state.sadness}, Anger: ${state.anger}, Fear: ${state.fear}, Disgust: ${state.disgust}, Surprise: ${state.surprise}`);
+            
+            // Don't add to message log for every update (already throttled in subscription)
+            
             // Update PAD model visualization
             updatePADVisualization(state.pleasure, state.arousal, state.dominance);
             
@@ -722,6 +1488,31 @@
             // Check if this is a final update (to remove from active list)
             if (rumination.is_final) {
                 if (activeRuminations[rumination.original_input_id]) {
+                    // Store in completed ruminations before removing
+                    const completedRumination = {
+                        ...activeRuminations[rumination.original_input_id],
+                        completedAt: new Date()
+                    };
+                    completedRuminations.unshift(completedRumination);
+                    
+                    // Keep only the latest 10000 completed ruminations
+                    if (completedRuminations.length > MAX_HISTORY_SIZE) {
+                        completedRuminations.pop();
+                    }
+                    
+                    // Also store in message history
+                    messageHistory.completed_ruminations.unshift({
+                        timestamp: new Date(),
+                        formattedTime: new Date().toLocaleTimeString(),
+                        topic: 'completed_ruminations',
+                        message: completedRumination
+                    });
+                    
+                    if (messageHistory.completed_ruminations.length > MAX_HISTORY_SIZE) {
+                        messageHistory.completed_ruminations.pop();
+                    }
+                    
+                    // Remove from active list
                     delete activeRuminations[rumination.original_input_id];
                 }
             } else {
@@ -775,6 +1566,49 @@
             }
         });
         
+        // Message History Tab Navigation
+        document.querySelectorAll('.history-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Update active tab
+                document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Update current tab
+                historyView.currentTab = this.dataset.tab;
+                historyView.currentPage = 1; // Reset to first page
+                updateMessageHistoryView();
+            });
+        });
+        
+        // Search input
+        document.getElementById('historySearchInput').addEventListener('input', function() {
+            historyView.searchTerm = this.value.toLowerCase();
+            historyView.currentPage = 1; // Reset to first page
+            updateMessageHistoryView();
+        });
+        
+        // Topic filter
+        document.getElementById('historyTopicFilter').addEventListener('change', function() {
+            historyView.currentTab = this.value;
+            historyView.currentPage = 1; // Reset to first page
+            updateMessageHistoryView();
+            
+            // Update active tab button
+            document.querySelectorAll('.history-tab').forEach(tab => {
+                if (tab.dataset.tab === historyView.currentTab) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+        });
+        
+        // Export button
+        document.getElementById('exportHistory').addEventListener('click', exportMessageHistory);
+        
+        // Clear button
+        document.getElementById('clearHistory').addEventListener('click', clearMessageHistory);
+        
         // Initialize with default URL
         const hostname = window.location.hostname;
         const defaultWsUrl = 'ws://' + hostname + ':9090';
@@ -783,6 +1617,9 @@
         // Initialize charts
         initEmotionsChart();
         initHistoryChart();
+        
+        // Load previous message history from localStorage
+        loadMessageHistory();
         
         // Wait for the page to load before connecting
         window.addEventListener('load', function() {
@@ -793,6 +1630,100 @@
                 initRosConnection(wsUrl);
             }, 1000);
         });
+
+        // Add reset button to the connection options section
+        const connectionOptions = document.querySelector('.connection-options div');
+        const resetButton = document.createElement('button');
+        resetButton.id = 'resetButton';
+        resetButton.textContent = 'Reset Connection';
+        resetButton.style.marginLeft = '10px';
+        resetButton.addEventListener('click', resetConnection);
+        connectionOptions.appendChild(resetButton);
+
+        // Add a debug button to log all current topics
+        const debugButton = document.createElement('button');
+        debugButton.id = 'debugButton';
+        debugButton.textContent = 'Debug Topics';
+        debugButton.style.marginLeft = '10px';
+        debugButton.style.backgroundColor = '#6c757d';
+        debugButton.addEventListener('click', function() {
+            if (ros) {
+                ros.getTopics(function(result) {
+                    const topics = result.topics;
+                    const types = result.types;
+                    
+                    addDebugMessage(`Available topics (${topics.length}):`);
+                    topics.forEach((topic, index) => {
+                        addDebugMessage(`${topic} (${types[index]})`);
+                        
+                        // Also add to message log for visibility
+                        addMessageToLog(`Topic: ${topic} (${types[index]})`, 'debug');
+                    });
+                    
+                    // Check message history counts
+                    addDebugMessage('Message history counts:');
+                    for (const topic in messageHistory) {
+                        addDebugMessage(`${topic}: ${messageHistory[topic].length} messages`);
+                    }
+                });
+            } else {
+                addDebugMessage('Cannot debug topics: Not connected to ROS');
+            }
+        });
+        connectionOptions.appendChild(debugButton);
+
+        // Add a new button to download full history as file
+        const downloadRawButton = document.createElement('button');
+        downloadRawButton.id = 'downloadRawButton';
+        downloadRawButton.textContent = 'Save Raw Data';
+        downloadRawButton.style.marginLeft = '10px';
+        downloadRawButton.style.backgroundColor = '#6f42c1';
+        downloadRawButton.style.color = 'white';
+        downloadRawButton.addEventListener('click', function() {
+            // Create a plaintext file with the raw logs
+            try {
+                let rawText = '';
+                // Add a section for each topic
+                for (const topic in messageHistory) {
+                    rawText += `\n\n========== TOPIC: ${topic} (${messageHistory[topic].length} messages) ==========\n\n`;
+                    
+                    messageHistory[topic].forEach(item => {
+                        let messageText;
+                        if (typeof item.message === 'string') {
+                            messageText = item.message;
+                        } else {
+                            // Format object messages for readability
+                            try {
+                                messageText = formatMessage(topic, item.message);
+                                // Remove HTML-like content
+                                messageText = messageText.replace(/<[^>]*>/g, '');
+                            } catch (e) {
+                                messageText = JSON.stringify(item.message);
+                            }
+                        }
+                        
+                        // Format timestamp and message
+                        rawText += `[${item.formattedTime}] ${messageText}\n`;
+                    });
+                }
+                
+                // Create download link
+                const blob = new Blob([rawText], {type: 'text/plain'});
+                const url = URL.createObjectURL(blob);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = url;
+                downloadLink.download = `ros_emotion_raw_logs_${new Date().toISOString().split('T')[0]}.txt`;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                
+                addDebugMessage('Raw message logs saved to text file');
+            } catch (e) {
+                console.error('Failed to save raw logs:', e);
+                addDebugMessage('Failed to save raw logs: ' + e.message);
+            }
+        });
+        connectionOptions.appendChild(downloadRawButton);
     </script>
 </body>
 </html> 

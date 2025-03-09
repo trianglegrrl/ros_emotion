@@ -1,6 +1,4 @@
-/**
- * Configuration for the ROS Emotion System
- */
+# Configuration for the ROS Emotion System
 
 emotional_state_manager:
   # Default initial emotional state

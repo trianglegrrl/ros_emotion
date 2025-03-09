@@ -58,7 +58,7 @@ class RuminationEngine(Node):
         # Create service client for emotion modification
         self.emotion_modify_client = self.create_client(
             EmotionModify,
-            'emotion_modify'
+            '/modify_emotional_state'
         )
         
         # Active ruminations
@@ -87,25 +87,27 @@ class RuminationEngine(Node):
     
     def rumination_callback(self, msg):
         """Handle a rumination update"""
-        self.get_logger().info(f"ALAINA: Received rumination update: {msg.rumination_id}")
+        # Use original_input_id as the rumination ID
+        rumination_id = msg.original_input_id
+        self.get_logger().info(f"ALAINA: Received rumination update: {rumination_id}")
         
         # If this is a new rumination, add it to active ruminations
-        if msg.rumination_id not in self.active_ruminations:
-            self.active_ruminations[msg.rumination_id] = {
+        if rumination_id not in self.active_ruminations:
+            self.active_ruminations[rumination_id] = {
                 'stage': 0,
                 'intensity': msg.intensity,
-                'subject': msg.subject,
+                'subject': msg.description,
                 'last_update': time.time(),
                 'message': msg
             }
-            self.get_logger().info(f"ALAINA: Added new rumination {msg.rumination_id}: {msg.subject}")
+            self.get_logger().info(f"ALAINA: Added new rumination {rumination_id}: {msg.description}")
         else:
             # Update existing rumination
-            self.active_ruminations[msg.rumination_id]['stage'] = msg.stage
-            self.active_ruminations[msg.rumination_id]['intensity'] = msg.intensity
-            self.active_ruminations[msg.rumination_id]['last_update'] = time.time()
-            self.active_ruminations[msg.rumination_id]['message'] = msg
-            self.get_logger().info(f"ALAINA: Updated rumination {msg.rumination_id} to stage {msg.stage}")
+            self.active_ruminations[rumination_id]['stage'] = msg.rumination_stage
+            self.active_ruminations[rumination_id]['intensity'] = msg.intensity
+            self.active_ruminations[rumination_id]['last_update'] = time.time()
+            self.active_ruminations[rumination_id]['message'] = msg
+            self.get_logger().info(f"ALAINA: Updated rumination {rumination_id} to stage {msg.rumination_stage}")
     
     def process_ruminations(self):
         """Process active ruminations and potentially trigger state changes"""
@@ -166,10 +168,15 @@ class RuminationEngine(Node):
         
         # Create updated rumination message
         msg = copy.deepcopy(rumination['message'])
-        msg.stage = rumination['stage']
+        msg.rumination_stage = rumination['stage']
         msg.intensity = rumination['intensity']
         msg.timestamp.sec = int(time.time())
         msg.timestamp.nanosec = int((time.time() % 1) * 1e9)
+        
+        # Calculate elapsed time
+        elapsed_sec = int(time.time() - rumination['last_update'])
+        msg.elapsed_time.sec = elapsed_sec
+        msg.elapsed_time.nanosec = 0
         
         # Query LLM to determine if this rumination should change emotional state
         self.query_llm_for_rumination(msg, rum_id)
@@ -193,23 +200,31 @@ class RuminationEngine(Node):
         # Create a new rumination ID
         rum_id = str(uuid.uuid4())
         
+        # Determine the primary emotion based on the highest value
+        emotions = {
+            "happiness": self.current_emotional_state.happiness,
+            "sadness": self.current_emotional_state.sadness,
+            "anger": self.current_emotional_state.anger,
+            "fear": self.current_emotional_state.fear,
+            "disgust": self.current_emotional_state.disgust,
+            "surprise": self.current_emotional_state.surprise
+        }
+        primary_emotion = max(emotions.items(), key=lambda x: x[1])[0]
+        
         # Create a rumination subject based on current primary emotion
-        subject = f"Thinking about feeling {self.current_emotional_state.primary_emotion}"
+        subject = f"Thinking about feeling {primary_emotion}"
         
         # Create initial rumination message
         msg = RuminationUpdate()
-        msg.rumination_id = rum_id
         msg.timestamp.sec = int(time.time())
         msg.timestamp.nanosec = int((time.time() % 1) * 1e9)
-        msg.stage = 0
+        msg.original_input_id = rum_id
+        msg.rumination_stage = 0
+        msg.elapsed_time.sec = 0
+        msg.elapsed_time.nanosec = 0
         msg.intensity = self.current_emotional_state.intensity
-        msg.subject = subject
-        msg.content = f"Initial rumination on {self.current_emotional_state.primary_emotion}"
-        msg.metadata = json.dumps({
-            "pleasure": self.current_emotional_state.pleasure,
-            "arousal": self.current_emotional_state.arousal,
-            "dominance": self.current_emotional_state.dominance
-        })
+        msg.description = subject
+        msg.is_final = False
         
         # Add to active ruminations
         self.active_ruminations[rum_id] = {
@@ -220,7 +235,7 @@ class RuminationEngine(Node):
             'message': msg
         }
         
-        # Publish new rumination
+        # Publish the rumination
         self.rumination_pub.publish(msg)
         self.get_logger().info(f"ALAINA: Started new rumination {rum_id}: {subject}")
     
@@ -251,48 +266,58 @@ class RuminationEngine(Node):
             self.get_logger().error(f"ALAINA: Failed to get LLM response for rumination {rum_id}")
     
     def build_rumination_prompt(self, rumination_msg):
-        """Build prompt for LLM to analyze rumination"""
-        # Format the current emotional state
+        """Build a prompt for the LLM to determine how rumination affects emotional state."""
+        # Get current emotional state
         current_state = {
             "pleasure": self.current_emotional_state.pleasure,
             "arousal": self.current_emotional_state.arousal,
             "dominance": self.current_emotional_state.dominance,
-            "primary_emotion": self.current_emotional_state.primary_emotion,
-            "secondary_emotion": self.current_emotional_state.secondary_emotion,
-            "intensity": self.current_emotional_state.intensity
+            "happiness": self.current_emotional_state.happiness,
+            "sadness": self.current_emotional_state.sadness,
+            "anger": self.current_emotional_state.anger,
+            "fear": self.current_emotional_state.fear,
+            "disgust": self.current_emotional_state.disgust,
+            "surprise": self.current_emotional_state.surprise
         }
+        emotions = {
+            "happiness": self.current_emotional_state.happiness,
+            "sadness": self.current_emotional_state.sadness,
+            "anger": self.current_emotional_state.anger,
+            "fear": self.current_emotional_state.fear,
+            "disgust": self.current_emotional_state.disgust,
+            "surprise": self.current_emotional_state.surprise
+        }
+        primary_emotion = max(emotions.items(), key=lambda x: x[1])[0]
         
         # Build the prompt
-        prompt = f"""You are the rumination engine for a robot's emotional system.
-Rumination is the process of repeatedly thinking about the same emotion or situation over time.
+        prompt = f"""You are the rumination system for a robot with emotions.
 
-The robot is currently ruminating on:
-Subject: {rumination_msg.subject}
-Stage: {rumination_msg.stage} of {self.stages}
-Intensity: {rumination_msg.intensity}
-Content: {rumination_msg.content}
-
-The robot's current emotional state is:
+CURRENT EMOTIONAL STATE:
 {json.dumps(current_state, indent=2)}
+Primary emotion: {primary_emotion}
 
-Based on this rumination at this stage, determine:
-1. Should this rumination change the robot's emotional state?
-2. If yes, how should the emotional state change?
+CURRENT RUMINATION:
+Original Input ID: {rumination_msg.original_input_id}
+Description: {rumination_msg.description}
+Stage: {rumination_msg.rumination_stage} of {self.stages}
+Intensity: {rumination_msg.intensity}
+
+Based on this rumination and the robot's current emotional state, determine if the rumination should change the robot's emotional state, and if so, how it should change.
+
+IMPORTANT: You MUST use one of these exact emotion names: happiness, sadness, anger, fear, disgust, surprise
 
 Respond ONLY with a valid JSON object in the following format:
-{
-  "should_update": true or false,
-  "pleasure_delta": float (-0.2 to 0.2),
-  "arousal_delta": float (-0.2 to 0.2),
-  "dominance_delta": float (-0.2 to 0.2),
-  "primary_emotion": string,
+{{
+  "should_change_state": true/false,
+  "pleasure_delta": float (-1.0 to 1.0),
+  "arousal_delta": float (-1.0 to 1.0),
+  "dominance_delta": float (-1.0 to 1.0),
+  "primary_emotion": string (one of: "happiness", "sadness", "anger", "fear", "disgust", "surprise"),
   "intensity": float (0.0 to 1.0),
   "confidence": float (0.0 to 1.0),
-  "response_text": string
-}
-
-Note: The changes should be subtle, as rumination typically has a gradual effect on emotions."""
-        
+  "explanation": string
+}}
+"""
         return prompt
     
     def call_llm_api(self, prompt):
@@ -305,7 +330,7 @@ Note: The changes should be subtle, as rumination typically has a gradual effect
             should_update = random.random() < 0.7  # 70% chance to update
             
             # For demo purposes, analyze the prompt content to determine mood direction
-            if "joy" in prompt or "happiness" in prompt or "excited" in prompt:
+            if "happiness" in prompt or "excited" in prompt:
                 # Generally positive emotion in rumination
                 pleasure_delta = random.uniform(0.01, 0.1)
                 arousal_delta = random.uniform(-0.05, 0.1)
@@ -322,12 +347,17 @@ Note: The changes should be subtle, as rumination typically has a gradual effect
             dominance_delta = random.uniform(-0.05, 0.05)
             
             # Extract current primary emotion from prompt
-            emotion_words = ["joy", "sadness", "anger", "fear", "surprise", "disgust", "trust", "anticipation"]
+            emotion_words = ["happiness", "sadness", "anger", "fear", "disgust", "surprise"]
             current_emotion = "neutral"
             for emotion in emotion_words:
                 if emotion in prompt.lower():
                     current_emotion = emotion
                     break
+            
+            # Make sure we return a valid emotion name
+            if current_emotion == "neutral" or current_emotion not in emotion_words:
+                # Default to happiness or sadness based on pleasure
+                current_emotion = "happiness" if pleasure_delta > 0 else "sadness"
             
             # Realistic response text for rumination
             response_texts = [
@@ -355,30 +385,28 @@ Note: The changes should be subtle, as rumination typically has a gradual effect
             self.get_logger().error(f"ALAINA: Error in LLM API call: {str(e)}")
             return None
     
-    def create_emotional_response(self, llm_data, rum_id, rumination_msg):
-        """Create and publish emotional response message"""
+    def create_emotional_response(self, data, rum_id, rumination_msg):
+        """Create an emotional response from the rumination."""
         response = EmotionalResponse()
-        response.timestamp.sec = int(time.time())
-        response.timestamp.nanosec = int((time.time() % 1) * 1e9)
         response.stimulus_id = rum_id
+        response.timestamp = self.get_clock().now().to_msg()
         response.is_rumination = True
-        response.response_text = llm_data.get("response_text", "")
-        response.source = "rumination"
-        response.previous_state = self.current_emotional_state
-        response.pleasure_delta = llm_data.get("pleasure_delta", 0.0)
-        response.arousal_delta = llm_data.get("arousal_delta", 0.0)
-        response.dominance_delta = llm_data.get("dominance_delta", 0.0)
-        response.primary_emotion = llm_data.get("primary_emotion", "neutral")
-        response.intensity = llm_data.get("intensity", 0.5)
-        response.confidence = llm_data.get("confidence", 0.5)
+        response.response_text = f"Rumination response: {data.get('description', 'No description')}"
+        response.source = "rumination_engine"
+        response.pleasure_delta = data.get("pleasure_delta", 0.0)
+        response.arousal_delta = data.get("arousal_delta", 0.0)
+        response.dominance_delta = data.get("dominance_delta", 0.0)
+        response.primary_emotion = data.get("primary_emotion", "neutral")
+        response.intensity = data.get("intensity", 0.5)
+        response.confidence = data.get("confidence", 0.8)
         response.metadata = json.dumps({
-            "rumination_stage": rumination_msg.stage,
-            "rumination_subject": rumination_msg.subject
+            "source": "rumination_engine",
+            "rumination_id": rum_id,
+            "rumination_stage": rumination_msg.rumination_stage,
+            "intensity": rumination_msg.intensity,
+            "elapsed_time": rumination_msg.elapsed_time.sec + (rumination_msg.elapsed_time.nanosec / 1e9)
         })
-        
-        # Publish the response
-        self.emotional_response_pub.publish(response)
-        self.get_logger().info(f"ALAINA: Published emotional response for rumination {rum_id}")
+        return response
     
     def update_emotional_state(self, llm_data, rum_id):
         """Update emotional state using service call"""
@@ -386,23 +414,64 @@ Note: The changes should be subtle, as rumination typically has a gradual effect
         while not self.emotion_modify_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('ALAINA: Waiting for emotion_modify service...')
         
-        # Create service request
-        request = EmotionModify.Request()
-        request.pleasure_delta = llm_data.get("pleasure_delta", 0.0)
-        request.arousal_delta = llm_data.get("arousal_delta", 0.0)
-        request.dominance_delta = llm_data.get("dominance_delta", 0.0)
-        request.primary_emotion = llm_data.get("primary_emotion", "neutral")
-        request.intensity = llm_data.get("intensity", 0.5)
+        # Create service request for pleasure
+        pleasure_request = EmotionModify.Request()
+        pleasure_request.modification_type = "relative"
+        pleasure_request.specific_emotion = "pleasure"
+        pleasure_request.value = llm_data.get("pleasure_delta", 0.0)
+        pleasure_request.reason = f"Rumination: {rum_id}"
+        pleasure_request.override_safety = False
         
-        # Call service
-        future = self.emotion_modify_client.call_async(request)
-        future.add_done_callback(lambda f: self.emotion_modify_callback(f, rum_id))
+        # Call service for pleasure
+        pleasure_future = self.emotion_modify_client.call_async(pleasure_request)
+        
+        # Create service request for arousal
+        arousal_request = EmotionModify.Request()
+        arousal_request.modification_type = "relative"
+        arousal_request.specific_emotion = "arousal"
+        arousal_request.value = llm_data.get("arousal_delta", 0.0)
+        arousal_request.reason = f"Rumination: {rum_id}"
+        arousal_request.override_safety = False
+        
+        # Call service for arousal
+        arousal_future = self.emotion_modify_client.call_async(arousal_request)
+        
+        # Create service request for dominance
+        dominance_request = EmotionModify.Request()
+        dominance_request.modification_type = "relative"
+        dominance_request.specific_emotion = "dominance"
+        dominance_request.value = llm_data.get("dominance_delta", 0.0)
+        dominance_request.reason = f"Rumination: {rum_id}"
+        dominance_request.override_safety = False
+        
+        # Call service for dominance
+        dominance_future = self.emotion_modify_client.call_async(dominance_request)
+        
+        # Create service request for primary emotion
+        emotion_request = EmotionModify.Request()
+        emotion_request.modification_type = "specific"
+        emotion_request.specific_emotion = llm_data.get("primary_emotion", "neutral")
+        emotion_request.value = llm_data.get("intensity", 0.5)
+        emotion_request.reason = f"Rumination: {rum_id}"
+        emotion_request.override_safety = False
+        
+        # Call service for primary emotion
+        emotion_future = self.emotion_modify_client.call_async(emotion_request)
+        
+        # Add callbacks
+        pleasure_future.add_done_callback(lambda f: self.emotion_modify_callback(f, rum_id, "pleasure"))
+        arousal_future.add_done_callback(lambda f: self.emotion_modify_callback(f, rum_id, "arousal"))
+        dominance_future.add_done_callback(lambda f: self.emotion_modify_callback(f, rum_id, "dominance"))
+        emotion_future.add_done_callback(lambda f: self.emotion_modify_callback(f, rum_id, "primary_emotion"))
     
-    def emotion_modify_callback(self, future, rum_id):
+    def emotion_modify_callback(self, future, rum_id, emotion_type):
         """Callback for emotion modify service response"""
         try:
             response = future.result()
-            self.get_logger().info(f"ALAINA: Emotional state updated successfully for rumination {rum_id}")
+            if response.success:
+                self.get_logger().info(f"ALAINA: Emotional state ({emotion_type}) updated successfully for rumination {rum_id}")
+            else:
+                self.get_logger().error(f"ALAINA: Failed to update emotional state ({emotion_type}) for rumination {rum_id}: {response.error_message}")
         except Exception as e:
             self.get_logger().error(f"ALAINA: Service call failed: {str(e)}")
 

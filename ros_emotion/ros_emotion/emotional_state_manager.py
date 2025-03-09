@@ -92,6 +92,9 @@ class EmotionalStateManager(Node):
         self.emotional_state.source = "initialization"
         self.emotional_state.description = "Initial emotional state"
         
+        # Initialize the primary emotion
+        self.update_primary_emotion()
+        
         self.get_logger().info("ALAINA: Emotional state initialized")
     
     def update_emotional_state(self):
@@ -156,23 +159,29 @@ class EmotionalStateManager(Node):
         
         self.emotional_state.surprise = utils.emotion_decay(
             self.emotional_state.surprise, 
-            decay_rates.get('surprise', 0.05), 
+            decay_rates.get('surprise', 0.04), 
             dt
         )
         
-        # Calculate overall intensity
-        basic_emotions = [
+        # Calculate overall emotional intensity
+        self.emotional_state.intensity = min(1.0, max(
+            abs(self.emotional_state.pleasure),
+            abs(self.emotional_state.arousal),
+            abs(self.emotional_state.dominance),
             self.emotional_state.happiness,
             self.emotional_state.sadness,
             self.emotional_state.anger,
             self.emotional_state.fear,
             self.emotional_state.disgust,
             self.emotional_state.surprise
-        ]
-        self.emotional_state.intensity = sum(abs(e) for e in basic_emotions) / len(basic_emotions)
+        ))
         
-        # Update timestamp
+        # Update the primary emotion based on the highest emotion value
+        self.update_primary_emotion()
+        
+        # Update the timestamp
         self.emotional_state.timestamp = utils.get_current_time()
+        self.emotional_state.source = "decay_update"
         
         # Publish updated state
         self.state_publisher.publish(self.emotional_state)
@@ -396,6 +405,9 @@ class EmotionalStateManager(Node):
         ]
         self.emotional_state.intensity = sum(abs(e) for e in basic_emotions) / len(basic_emotions)
         
+        # Update the primary emotion based on the modified state
+        self.update_primary_emotion()
+        
         # Publish updated state
         if response.success:
             self.state_publisher.publish(self.emotional_state)
@@ -404,6 +416,28 @@ class EmotionalStateManager(Node):
         response.updated_emotional_state = self.emotional_state
         
         return response
+
+    def update_primary_emotion(self):
+        """Update the primary_emotion field based on the highest emotional value."""
+        emotions = {
+            "happiness": self.emotional_state.happiness,
+            "sadness": self.emotional_state.sadness,
+            "anger": self.emotional_state.anger,
+            "fear": self.emotional_state.fear,
+            "disgust": self.emotional_state.disgust,
+            "surprise": self.emotional_state.surprise
+        }
+        
+        # Find the emotion with the highest value
+        primary_emotion = max(emotions.items(), key=lambda x: x[1])[0]
+        
+        # If all emotions are below threshold, set to neutral
+        threshold = self.manager_config.get('threshold', 0.05)
+        if emotions[primary_emotion] < threshold:
+            primary_emotion = "neutral"
+        
+        self.emotional_state.primary_emotion = primary_emotion
+        self.get_logger().info(f"ALAINA: Primary emotion updated to: {primary_emotion}")
 
 def main(args=None):
     rclpy.init(args=args)

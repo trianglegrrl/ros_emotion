@@ -27,4 +27,7 @@ float32 confidence
 string source
 
 # Optional human-readable description of the emotional state
-string description 
+string description
+
+# Primary dominant emotion (e.g., "happiness", "sadness", "anger", "fear", "disgust", "surprise")
+string primary_emotion 

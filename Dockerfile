@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
 RUN echo '#!/bin/bash\n\
 source /opt/ros/$ROS_DISTRO/setup.bash\n\
 source /ros_ws/install/setup.bash\n\
+mkdir -p /root/.ros/log\n\
 ros2 run ros_emotion emotional_state_manager.py &\n\
 ros2 run ros_emotion sensory_input_processor.py &\n\
 ros2 run ros_emotion llm_integration.py &\n\
