@@ -10,6 +10,7 @@ import json
 import uuid
 import time
 import ros_emotion.utils as utils
+from ros_emotion.emotion_model import create_emotion_model
 
 class LLMIntegration(Node):
     def __init__(self):
@@ -18,6 +19,11 @@ class LLMIntegration(Node):
         # Load configuration
         self.config = utils.load_config(self)
         self.llm_config = self.config.get('llm_integration', {})
+        
+        # Initialize the emotion model
+        emotion_model_type = self.config.get('emotional_state_manager', {}).get('emotion_model_type', 'pad_basic')
+        self.emotion_model = create_emotion_model(emotion_model_type)
+        self.get_logger().info(f"ALAINA: Created emotion model of type {emotion_model_type}")
         
         # Create QoS profile
         qos = QoSProfile(
@@ -93,18 +99,8 @@ class LLMIntegration(Node):
         
         # Ensure primary_emotion is set, even if missing in the message
         if not hasattr(self.current_emotional_state, 'primary_emotion') or not self.current_emotional_state.primary_emotion:
-            emotions = {
-                "happiness": self.current_emotional_state.happiness,
-                "sadness": self.current_emotional_state.sadness,
-                "anger": self.current_emotional_state.anger,
-                "fear": self.current_emotional_state.fear,
-                "disgust": self.current_emotional_state.disgust,
-                "surprise": self.current_emotional_state.surprise
-            }
-            if any(emotions.values()):
-                self.current_emotional_state.primary_emotion = max(emotions.items(), key=lambda x: x[1])[0]
-            else:
-                self.current_emotional_state.primary_emotion = "neutral"
+            # Use emotion model to determine primary emotion
+            self.current_emotional_state.primary_emotion = self.emotion_model.get_primary_emotion(self.current_emotional_state)
             self.get_logger().info(f"ALAINA: Added missing primary_emotion: {self.current_emotional_state.primary_emotion}")
     
     def sensory_input_callback(self, msg):
@@ -153,35 +149,31 @@ class LLMIntegration(Node):
     
     def build_sensory_processing_prompt(self, sensory_input):
         """Build a prompt for the LLM to process sensory input"""
-        # Format the current emotional state using fields that actually exist
-        current_state = {
-            "pleasure": self.current_emotional_state.pleasure,
-            "arousal": self.current_emotional_state.arousal,
-            "dominance": self.current_emotional_state.dominance,
-            "happiness": self.current_emotional_state.happiness,
-            "sadness": self.current_emotional_state.sadness,
-            "anger": self.current_emotional_state.anger,
-            "fear": self.current_emotional_state.fear,
-            "disgust": self.current_emotional_state.disgust,
-            "surprise": self.current_emotional_state.surprise,
-            "intensity": self.current_emotional_state.intensity,
-            "description": self.current_emotional_state.description if hasattr(self.current_emotional_state, 'description') else ""
-        }
+        # Get dimensions and emotions from the emotion model
+        dimensions = self.emotion_model.get_dimensions()
+        emotions = self.emotion_model.get_all_emotions()
         
-        # Determine current primary emotion based on basic emotion values
-        emotions = {
-            "happiness": self.current_emotional_state.happiness,
-            "sadness": self.current_emotional_state.sadness,
-            "anger": self.current_emotional_state.anger,
-            "fear": self.current_emotional_state.fear,
-            "disgust": self.current_emotional_state.disgust,
-            "surprise": self.current_emotional_state.surprise
-        }
-        current_primary_emotion = max(emotions.items(), key=lambda x: x[1])[0]
-        self.get_logger().info(f"ALAINA: Current primary emotion: {current_primary_emotion}")
+        # Format the current emotional state using the emotion model
+        current_state = {}
+        
+        # Add dimensional values
+        for dim in dimensions:
+            current_state[dim] = self.emotion_model.get_emotion_value(self.current_emotional_state, dim)
+        
+        # Add basic emotion values
+        for emotion in emotions:
+            current_state[emotion] = self.emotion_model.get_emotion_value(self.current_emotional_state, emotion)
+        
+        # Add other state information
+        current_state["intensity"] = self.emotion_model.calculate_intensity(self.current_emotional_state)
+        current_state["description"] = self.current_emotional_state.description if hasattr(self.current_emotional_state, 'description') else ""
+        
+        # Get primary emotion from the emotion model
+        primary_emotion = self.emotion_model.get_primary_emotion(self.current_emotional_state)
+        self.get_logger().info(f"ALAINA: Current primary emotion: {primary_emotion}")
         
         # Add primary emotion to the state
-        current_state["primary_emotion"] = current_primary_emotion
+        current_state["primary_emotion"] = primary_emotion
         
         # Build the prompt
         prompt = f"""You are the emotional processing system for a robot. 
@@ -202,14 +194,14 @@ Based on this information, determine:
 2. What should be the primary emotion after this input?
 3. What should be the response text that explains this change?
 
-IMPORTANT: You MUST use one of these exact emotion names: happiness, sadness, anger, fear, disgust, surprise
+IMPORTANT: You MUST use one of these exact emotion names: {", ".join(emotions)}
 
 Respond ONLY with a valid JSON object in the following format:
 {{
   "pleasure_delta": float (-1.0 to 1.0),
   "arousal_delta": float (-1.0 to 1.0),
   "dominance_delta": float (-1.0 to 1.0),
-  "primary_emotion": string (one of: "happiness", "sadness", "anger", "fear", "disgust", "surprise"),
+  "primary_emotion": string (one of: {", ".join([f'"{e}"' for e in emotions])}),
   "intensity": float (0.0 to 1.0),
   "confidence": float (0.0 to 1.0),
   "response_text": string
@@ -382,113 +374,34 @@ Respond ONLY with a valid JSON object in the following format:
             self.get_logger().error(f"ALAINA: Error processing input with LLM: {str(e)}")
     
     def query_llm(self, sensory_input):
-        """Query the LLM with the current emotional state and sensory input."""
-        # Format the emotional state for the prompt
-        emotional_state_str = self.format_emotional_state(self.current_emotional_state)
-        
-        # Create the prompt
-        prompt = f"""
-Current Emotional State:
-{emotional_state_str}
-
-Sensory Input:
-Type: {sensory_input.input_type}
-Description: {sensory_input.description}
-Intensity: {sensory_input.intensity}
-Source: {sensory_input.source}
-
-Based on this sensory input, how should the robot's emotional state change? 
-Provide a response in the following JSON format:
-{{
-  "pleasure_change": <float between -1.0 and 1.0>,
-  "arousal_change": <float between -1.0 and 1.0>,
-  "dominance_change": <float between -1.0 and 1.0>,
-  "happiness_change": <float between -1.0 and 1.0>,
-  "sadness_change": <float between -1.0 and 1.0>,
-  "anger_change": <float between -1.0 and 1.0>,
-  "fear_change": <float between -1.0 and 1.0>,
-  "disgust_change": <float between -1.0 and 1.0>,
-  "surprise_change": <float between -1.0 and 1.0>,
-  "description": "<brief description of the emotional response>"
-}}
-"""
-        
-        # Prepare the request
-        headers = {
-            'Content-Type': 'application/json'
-        }
-        
-        if self.api_key:
-            headers['Authorization'] = f'Bearer {self.api_key}'
-        
-        data = {
-            'model': self.model,
-            'messages': [
-                {
-                    'role': 'system',
-                    'content': self.system_prompt
-                },
-                {
-                    'role': 'user',
-                    'content': prompt
-                }
-            ],
-            'max_tokens': self.max_tokens,
-            'temperature': self.temperature
-        }
-        
-        # Make the request
-        try:
-            response = requests.post(
-                self.api_base_url + '/completions',
-                headers=headers,
-                json=data,
-                timeout=self.timeout
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                content = result['choices'][0]['message']['content']
-                
-                # Extract the JSON part from the response
-                try:
-                    # Try to find JSON in the response
-                    json_start = content.find('{')
-                    json_end = content.rfind('}') + 1
-                    
-                    if json_start >= 0 and json_end > json_start:
-                        json_str = content[json_start:json_end]
-                        return json.loads(json_str)
-                    else:
-                        self.get_logger().warning(f"ALAINA: No JSON found in LLM response: {content}")
-                        return {}
-                except json.JSONDecodeError:
-                    self.get_logger().warning(f"ALAINA: Failed to parse JSON from LLM response: {content}")
-                    return {}
-            else:
-                self.get_logger().error(f"ALAINA: LLM request failed with status {response.status_code}: {response.text}")
-                return {}
-        except requests.exceptions.RequestException as e:
-            self.get_logger().error(f"ALAINA: LLM request error: {str(e)}")
-            return {}
+        """Query the LLM directly (not through the service) for rapid prototyping."""
+        pass
     
     def format_emotional_state(self, state):
         """Format the emotional state for the LLM prompt."""
+        # Get dimensions and basic emotions from the emotion model
+        dimensions = self.emotion_model.get_dimensions()
+        emotions = self.emotion_model.get_all_emotions()
+        
+        # Format dimensions section
+        dimensions_text = "Dimensional Model:\n"
+        for dim in dimensions:
+            value = self.emotion_model.get_emotion_value(state, dim)
+            dimensions_text += f"- {dim.capitalize()}: {value:.2f} (-1.0 to 1.0)\n"
+        
+        # Format basic emotions section
+        emotions_text = "\nBasic Emotions:\n"
+        for emotion in emotions:
+            value = self.emotion_model.get_emotion_value(state, emotion)
+            emotions_text += f"- {emotion.capitalize()}: {value:.2f} (0.0 to 1.0)\n"
+        
+        # Calculate intensity using the emotion model
+        intensity = self.emotion_model.calculate_intensity(state)
+        
         return f"""
-Dimensional Model:
-- Pleasure: {state.pleasure:.2f} (-1.0 to 1.0)
-- Arousal: {state.arousal:.2f} (-1.0 to 1.0)
-- Dominance: {state.dominance:.2f} (-1.0 to 1.0)
-
-Basic Emotions:
-- Happiness: {state.happiness:.2f} (0.0 to 1.0)
-- Sadness: {state.sadness:.2f} (0.0 to 1.0)
-- Anger: {state.anger:.2f} (0.0 to 1.0)
-- Fear: {state.fear:.2f} (0.0 to 1.0)
-- Disgust: {state.disgust:.2f} (0.0 to 1.0)
-- Surprise: {state.surprise:.2f} (0.0 to 1.0)
-
-Overall Intensity: {state.intensity:.2f}
+{dimensions_text}
+{emotions_text}
+Overall Intensity: {intensity:.2f}
 """
     
     def generate_rumination_update(self, sensory_input, llm_response):
@@ -534,16 +447,19 @@ Overall Intensity: {state.intensity:.2f}
         
         self.get_logger().info(f"ALAINA: Published initial rumination update for: {sensory_input.description}")
 
+
 def main(args=None):
     rclpy.init(args=args)
     node = LLMIntegration()
+    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("ALAINA: Keyboard interrupt, shutting down")
+        pass
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main() 
