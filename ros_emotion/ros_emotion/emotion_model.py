@@ -93,17 +93,12 @@ class PADBasicEmotionModel(EmotionModel):
         emotional_state.timestamp = utils.get_current_time()
         
         # Initialize PAD dimensions
-        emotional_state.pleasure = 0.0
-        emotional_state.arousal = 0.0
-        emotional_state.dominance = 0.0
+        for dimension in self._dimensions:
+            self.set_emotion_value(emotional_state, dimension, 0.0)
         
         # Initialize basic emotions
-        emotional_state.happiness = 0.0
-        emotional_state.sadness = 0.0
-        emotional_state.anger = 0.0
-        emotional_state.fear = 0.0
-        emotional_state.disgust = 0.0
-        emotional_state.surprise = 0.0
+        for emotion in self._basic_emotions:
+            self.set_emotion_value(emotional_state, emotion, 0.0)
         
         # Initialize other fields
         emotional_state.intensity = 0.0
@@ -117,12 +112,8 @@ class PADBasicEmotionModel(EmotionModel):
     def get_primary_emotion(self, emotional_state):
         """Determine the primary emotion based on the current state"""
         emotions = {
-            "happiness": emotional_state.happiness,
-            "sadness": emotional_state.sadness,
-            "anger": emotional_state.anger,
-            "fear": emotional_state.fear,
-            "disgust": emotional_state.disgust,
-            "surprise": emotional_state.surprise
+            emotion: self.get_emotion_value(emotional_state, emotion)
+            for emotion in self._basic_emotions
         }
         
         # Find the emotion with the highest value
@@ -137,60 +128,18 @@ class PADBasicEmotionModel(EmotionModel):
     def update_state(self, emotional_state, time_diff, decay_rates):
         """Update the emotional state based on decay rates"""
         # Update PAD dimensions
-        emotional_state.pleasure = utils.emotion_decay(
-            emotional_state.pleasure, 
-            decay_rates.get('pleasure', 0.01), 
-            time_diff
-        )
-        
-        emotional_state.arousal = utils.emotion_decay(
-            emotional_state.arousal, 
-            decay_rates.get('arousal', 0.02), 
-            time_diff
-        )
-        
-        emotional_state.dominance = utils.emotion_decay(
-            emotional_state.dominance, 
-            decay_rates.get('dominance', 0.005), 
-            time_diff
-        )
+        for dimension in ['pleasure', 'arousal', 'dominance']:
+            current_value = self.get_emotion_value(emotional_state, dimension)
+            decay_rate = decay_rates.get(dimension, 0.01)  # Default to 0.01 if not specified
+            new_value = utils.emotion_decay(current_value, decay_rate, time_diff)
+            self.set_emotion_value(emotional_state, dimension, new_value)
         
         # Update basic emotions
-        emotional_state.happiness = utils.emotion_decay(
-            emotional_state.happiness, 
-            decay_rates.get('happiness', 0.02), 
-            time_diff
-        )
-        
-        emotional_state.sadness = utils.emotion_decay(
-            emotional_state.sadness, 
-            decay_rates.get('sadness', 0.01), 
-            time_diff
-        )
-        
-        emotional_state.anger = utils.emotion_decay(
-            emotional_state.anger, 
-            decay_rates.get('anger', 0.03), 
-            time_diff
-        )
-        
-        emotional_state.fear = utils.emotion_decay(
-            emotional_state.fear, 
-            decay_rates.get('fear', 0.02), 
-            time_diff
-        )
-        
-        emotional_state.disgust = utils.emotion_decay(
-            emotional_state.disgust, 
-            decay_rates.get('disgust', 0.01), 
-            time_diff
-        )
-        
-        emotional_state.surprise = utils.emotion_decay(
-            emotional_state.surprise, 
-            decay_rates.get('surprise', 0.05), 
-            time_diff
-        )
+        for emotion in ['happiness', 'sadness', 'anger', 'fear', 'disgust', 'surprise']:
+            current_value = self.get_emotion_value(emotional_state, emotion)
+            decay_rate = decay_rates.get(emotion, 0.02)  # Default to 0.02 if not specified
+            new_value = utils.emotion_decay(current_value, decay_rate, time_diff)
+            self.set_emotion_value(emotional_state, emotion, new_value)
         
         # Update intensity
         emotional_state.intensity = self.calculate_intensity(emotional_state)
@@ -217,27 +166,25 @@ class PADBasicEmotionModel(EmotionModel):
             
         elif modification_type == "absolute":
             # Set all emotions to the specified value
-            emotional_state.pleasure = utils.clamp(value)
-            emotional_state.arousal = utils.clamp(value)
-            emotional_state.dominance = utils.clamp(value)
-            emotional_state.happiness = utils.clamp(value, 0.0, 1.0)
-            emotional_state.sadness = utils.clamp(value, 0.0, 1.0)
-            emotional_state.anger = utils.clamp(value, 0.0, 1.0)
-            emotional_state.fear = utils.clamp(value, 0.0, 1.0)
-            emotional_state.disgust = utils.clamp(value, 0.0, 1.0)
-            emotional_state.surprise = utils.clamp(value, 0.0, 1.0)
+            dimensions = ['pleasure', 'arousal', 'dominance']
+            for dimension in dimensions:
+                self.set_emotion_value(emotional_state, dimension, utils.clamp(value))
+                
+            emotions = ['happiness', 'sadness', 'anger', 'fear', 'disgust', 'surprise']
+            for emotion in emotions:
+                self.set_emotion_value(emotional_state, emotion, utils.clamp(value, 0.0, 1.0))
             
         elif modification_type == "relative":
             # Adjust all emotions by the specified value
-            emotional_state.pleasure = utils.clamp(emotional_state.pleasure + value)
-            emotional_state.arousal = utils.clamp(emotional_state.arousal + value)
-            emotional_state.dominance = utils.clamp(emotional_state.dominance + value)
-            emotional_state.happiness = utils.clamp(emotional_state.happiness + value, 0.0, 1.0)
-            emotional_state.sadness = utils.clamp(emotional_state.sadness + value, 0.0, 1.0)
-            emotional_state.anger = utils.clamp(emotional_state.anger + value, 0.0, 1.0)
-            emotional_state.fear = utils.clamp(emotional_state.fear + value, 0.0, 1.0)
-            emotional_state.disgust = utils.clamp(emotional_state.disgust + value, 0.0, 1.0)
-            emotional_state.surprise = utils.clamp(emotional_state.surprise + value, 0.0, 1.0)
+            dimensions = ['pleasure', 'arousal', 'dominance']
+            for dimension in dimensions:
+                current = self.get_emotion_value(emotional_state, dimension)
+                self.set_emotion_value(emotional_state, dimension, utils.clamp(current + value))
+                
+            emotions = ['happiness', 'sadness', 'anger', 'fear', 'disgust', 'surprise']
+            for emotion in emotions:
+                current = self.get_emotion_value(emotional_state, emotion)
+                self.set_emotion_value(emotional_state, emotion, utils.clamp(current + value, 0.0, 1.0))
             
         elif modification_type == "specific" and specific_emotion:
             # Modify only the specific emotion
@@ -306,20 +253,18 @@ class PADBasicEmotionModel(EmotionModel):
     def calculate_intensity(self, emotional_state):
         """Calculate the overall intensity of the emotional state"""
         # Method 1: Average of PAD dimensions (absolute values)
-        pad_intensity = (abs(emotional_state.pleasure) + 
-                        abs(emotional_state.arousal) + 
-                        abs(emotional_state.dominance)) / 3.0
+        pad_intensity = (
+            abs(self.get_emotion_value(emotional_state, "pleasure")) + 
+            abs(self.get_emotion_value(emotional_state, "arousal")) + 
+            abs(self.get_emotion_value(emotional_state, "dominance"))
+        ) / 3.0
         
         # Method 2: Average of basic emotions
-        basic_emotions = [
-            emotional_state.happiness,
-            emotional_state.sadness,
-            emotional_state.anger,
-            emotional_state.fear,
-            emotional_state.disgust,
-            emotional_state.surprise
+        basic_emotions_values = [
+            self.get_emotion_value(emotional_state, emotion)
+            for emotion in self._basic_emotions
         ]
-        basic_intensity = sum(basic_emotions) / len(basic_emotions)
+        basic_intensity = sum(basic_emotions_values) / len(basic_emotions_values)
         
         # Combine both methods (can be adjusted based on preference)
         return (pad_intensity + basic_intensity) / 2.0

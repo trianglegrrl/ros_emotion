@@ -10,6 +10,7 @@ import uuid
 import ros_emotion.utils as utils
 # Import our emotion model
 from ros_emotion.emotion_model import create_emotion_model, EmotionModel, PADBasicEmotionModel
+import os
 
 class EmotionalStateManager(Node):
     def __init__(self):
@@ -84,24 +85,44 @@ class EmotionalStateManager(Node):
     
     def initialize_emotional_state(self):
         """Initialize the emotional state with default values."""
+        # Create a new emotional state using the emotion model
+        self.emotional_state = self.emotion_model.create_emotional_state()
+        
+        # Override any values specified in config
         initial_state = self.manager_config.get('initial_state', {})
         
-        self.emotional_state.timestamp = utils.get_current_time()
-        self.emotional_state.pleasure = initial_state.get('pleasure', 0.0)
-        self.emotional_state.arousal = initial_state.get('arousal', 0.0)
-        self.emotional_state.dominance = initial_state.get('dominance', 0.0)
-        self.emotional_state.happiness = initial_state.get('happiness', 0.0)
-        self.emotional_state.sadness = initial_state.get('sadness', 0.0)
-        self.emotional_state.anger = initial_state.get('anger', 0.0)
-        self.emotional_state.fear = initial_state.get('fear', 0.0)
-        self.emotional_state.disgust = initial_state.get('disgust', 0.0)
-        self.emotional_state.surprise = initial_state.get('surprise', 0.0)
-        self.emotional_state.intensity = initial_state.get('intensity', 0.0)
-        self.emotional_state.confidence = initial_state.get('confidence', 1.0)
-        self.emotional_state.source = "initialization"
-        self.emotional_state.description = "Initial emotional state"
+        # Define which fields are emotions vs. metadata
+        emotion_dimensions = self.emotion_model.get_dimensions()
+        basic_emotions = self.emotion_model.get_all_emotions()
+        valid_emotions = emotion_dimensions + basic_emotions
         
-        # Initialize the primary emotion
+        # Apply any custom initial values from config
+        for field, value in initial_state.items():
+            if field in valid_emotions:
+                # For valid emotions, use the emotion model interface
+                self.emotion_model.set_emotion_value(
+                    self.emotional_state, 
+                    field, 
+                    value
+                )
+            elif field == "intensity":
+                self.emotional_state.intensity = value
+            elif field == "confidence":
+                self.emotional_state.confidence = value
+            elif field == "source":
+                self.emotional_state.source = value
+            elif field == "description":
+                self.emotional_state.description = value
+            elif field == "primary_emotion":
+                self.emotional_state.primary_emotion = value
+        
+        # Set default values for required fields if not already set
+        if not self.emotional_state.source:
+            self.emotional_state.source = "initialization"
+        if not self.emotional_state.description:
+            self.emotional_state.description = "Initial emotional state"
+        
+        # Update the primary emotion
         self.update_primary_emotion()
         
         self.get_logger().info("ALAINA: Emotional state initialized")
@@ -118,66 +139,8 @@ class EmotionalStateManager(Node):
         # Apply decay to emotional dimensions
         decay_rates = self.manager_config.get('decay_rates', {})
         
-        # Update dimensional model
-        self.emotional_state.pleasure = utils.emotion_decay(
-            self.emotional_state.pleasure, 
-            decay_rates.get('pleasure', 0.01), 
-            time_diff
-        )
-        
-        self.emotional_state.arousal = utils.emotion_decay(
-            self.emotional_state.arousal, 
-            decay_rates.get('arousal', 0.02), 
-            time_diff
-        )
-        
-        self.emotional_state.dominance = utils.emotion_decay(
-            self.emotional_state.dominance, 
-            decay_rates.get('dominance', 0.005), 
-            time_diff
-        )
-        
-        # Update basic emotions
-        self.emotional_state.happiness = utils.emotion_decay(
-            self.emotional_state.happiness, 
-            decay_rates.get('happiness', 0.02), 
-            time_diff
-        )
-        
-        self.emotional_state.sadness = utils.emotion_decay(
-            self.emotional_state.sadness, 
-            decay_rates.get('sadness', 0.01), 
-            time_diff
-        )
-        
-        self.emotional_state.anger = utils.emotion_decay(
-            self.emotional_state.anger, 
-            decay_rates.get('anger', 0.03), 
-            time_diff
-        )
-        
-        self.emotional_state.fear = utils.emotion_decay(
-            self.emotional_state.fear, 
-            decay_rates.get('fear', 0.02), 
-            time_diff
-        )
-        
-        self.emotional_state.disgust = utils.emotion_decay(
-            self.emotional_state.disgust, 
-            decay_rates.get('disgust', 0.01), 
-            time_diff
-        )
-        
-        self.emotional_state.surprise = utils.emotion_decay(
-            self.emotional_state.surprise, 
-            decay_rates.get('surprise', 0.05), 
-            time_diff
-        )
-        
-        # Update overall intensity
-        self.emotional_state.intensity = (abs(self.emotional_state.pleasure) + 
-                                       abs(self.emotional_state.arousal) + 
-                                       abs(self.emotional_state.dominance)) / 3.0
+        # Use the emotion model to update the state
+        self.emotion_model.update_state(self.emotional_state, time_diff, decay_rates)
         
         # Update timestamp
         self.emotional_state.timestamp = utils.get_current_time()
@@ -195,9 +158,12 @@ class EmotionalStateManager(Node):
         
         # Debug log
         if self.count % 10 == 0:  # only log every 10th update to reduce spam
+            # Use emotion model to get dimension values
+            dimensions = self.emotion_model.get_dimensions()
+            dimension_str = ", ".join([f"{dim[0].upper()}{dim[1:]}={self.emotion_model.get_emotion_value(self.emotional_state, dim):.2f}" for dim in dimensions])
+            
             self.get_logger().info(
-                f"ALAINA: Emotional state: P={self.emotional_state.pleasure:.2f}, " +
-                f"A={self.emotional_state.arousal:.2f}, D={self.emotional_state.dominance:.2f}, " +
+                f"ALAINA: Emotional state: {dimension_str}, " +
                 f"Primary={self.emotional_state.primary_emotion}"
             )
             
@@ -218,39 +184,43 @@ class EmotionalStateManager(Node):
         """Process rumination updates."""
         self.get_logger().info(f"ALAINA: Received rumination update: {msg.description}")
         
-        # Apply changes from rumination
-        max_rate = self.manager_config.get('max_rate_of_change', 0.2)
+        # Apply changes from rumination using emotion model
         
-        # Update dimensional model
-        self.emotional_state.pleasure = utils.clamp(
-            self.emotional_state.pleasure + msg.pleasure_change
-        )
-        self.emotional_state.arousal = utils.clamp(
-            self.emotional_state.arousal + msg.arousal_change
-        )
-        self.emotional_state.dominance = utils.clamp(
-            self.emotional_state.dominance + msg.dominance_change
-        )
-        
+        # Update the emotional state fields according to the rumination changes
+        if hasattr(msg, 'pleasure_change') and msg.pleasure_change != 0.0:
+            current_val = self.emotion_model.get_emotion_value(self.emotional_state, "pleasure")
+            self.emotion_model.set_emotion_value(
+                self.emotional_state,
+                "pleasure",
+                current_val + msg.pleasure_change
+            )
+            
+        if hasattr(msg, 'arousal_change') and msg.arousal_change != 0.0:
+            current_val = self.emotion_model.get_emotion_value(self.emotional_state, "arousal")
+            self.emotion_model.set_emotion_value(
+                self.emotional_state,
+                "arousal",
+                current_val + msg.arousal_change
+            )
+            
+        if hasattr(msg, 'dominance_change') and msg.dominance_change != 0.0:
+            current_val = self.emotion_model.get_emotion_value(self.emotional_state, "dominance")
+            self.emotion_model.set_emotion_value(
+                self.emotional_state,
+                "dominance",
+                current_val + msg.dominance_change
+            )
+            
         # Update basic emotions
-        self.emotional_state.happiness = utils.clamp(
-            self.emotional_state.happiness + msg.happiness_change, 0.0, 1.0
-        )
-        self.emotional_state.sadness = utils.clamp(
-            self.emotional_state.sadness + msg.sadness_change, 0.0, 1.0
-        )
-        self.emotional_state.anger = utils.clamp(
-            self.emotional_state.anger + msg.anger_change, 0.0, 1.0
-        )
-        self.emotional_state.fear = utils.clamp(
-            self.emotional_state.fear + msg.fear_change, 0.0, 1.0
-        )
-        self.emotional_state.disgust = utils.clamp(
-            self.emotional_state.disgust + msg.disgust_change, 0.0, 1.0
-        )
-        self.emotional_state.surprise = utils.clamp(
-            self.emotional_state.surprise + msg.surprise_change, 0.0, 1.0
-        )
+        for emotion in ['happiness', 'sadness', 'anger', 'fear', 'disgust', 'surprise']:
+            change_field = f"{emotion}_change"
+            if hasattr(msg, change_field) and getattr(msg, change_field) != 0.0:
+                current_val = self.emotion_model.get_emotion_value(self.emotional_state, emotion)
+                self.emotion_model.set_emotion_value(
+                    self.emotional_state,
+                    emotion,
+                    current_val + getattr(msg, change_field)
+                )
         
         # Update source and description
         self.emotional_state.source = f"rumination:{msg.original_input_id}"
@@ -259,6 +229,9 @@ class EmotionalStateManager(Node):
         
         # Update timestamp
         self.emotional_state.timestamp = utils.get_current_time()
+        
+        # Update primary emotion
+        self.update_primary_emotion()
         
         # Publish updated state
         self.state_publisher.publish(self.emotional_state)
@@ -271,60 +244,42 @@ class EmotionalStateManager(Node):
         response.error_message = ""
         
         # Copy the current emotional state
-        response.emotional_state = self.emotional_state
+        response.emotional_state = utils.copy_emotional_state(self.emotional_state)
         
         # If not requesting full state, clear fields based on query type
         if request.query_type == "dimensional":
-            # Clear categorical emotions
-            response.emotional_state.happiness = 0.0
-            response.emotional_state.sadness = 0.0
-            response.emotional_state.anger = 0.0
-            response.emotional_state.fear = 0.0
-            response.emotional_state.disgust = 0.0
-            response.emotional_state.surprise = 0.0
+            # Clear categorical emotions using emotion model
+            for emotion in ['happiness', 'sadness', 'anger', 'fear', 'disgust', 'surprise']:
+                self.emotion_model.set_emotion_value(response.emotional_state, emotion, 0.0)
         
         elif request.query_type == "categorical":
-            # Clear dimensional model
-            response.emotional_state.pleasure = 0.0
-            response.emotional_state.arousal = 0.0
-            response.emotional_state.dominance = 0.0
+            # Clear dimensional model using emotion model
+            for dimension in ['pleasure', 'arousal', 'dominance']:
+                self.emotion_model.set_emotion_value(response.emotional_state, dimension, 0.0)
         
         elif request.query_type == "specific":
             # Return only the specific emotion
             specific = request.specific_emotion.lower()
             
-            # Clear all emotions first
+            # Create a new state with only the specific emotion
             temp_state = EmotionalState()
             temp_state.timestamp = self.emotional_state.timestamp
             temp_state.intensity = self.emotional_state.intensity
             temp_state.confidence = self.emotional_state.confidence
             temp_state.source = self.emotional_state.source
+            temp_state.primary_emotion = ""  # Will be updated based on remaining values
             
             # Set only the requested emotion
-            if specific == "pleasure":
-                temp_state.pleasure = self.emotional_state.pleasure
-            elif specific == "arousal":
-                temp_state.arousal = self.emotional_state.arousal
-            elif specific == "dominance":
-                temp_state.dominance = self.emotional_state.dominance
-            elif specific == "happiness":
-                temp_state.happiness = self.emotional_state.happiness
-            elif specific == "sadness":
-                temp_state.sadness = self.emotional_state.sadness
-            elif specific == "anger":
-                temp_state.anger = self.emotional_state.anger
-            elif specific == "fear":
-                temp_state.fear = self.emotional_state.fear
-            elif specific == "disgust":
-                temp_state.disgust = self.emotional_state.disgust
-            elif specific == "surprise":
-                temp_state.surprise = self.emotional_state.surprise
+            if specific in ['pleasure', 'arousal', 'dominance', 
+                           'happiness', 'sadness', 'anger', 
+                           'fear', 'disgust', 'surprise']:
+                # Copy the specific emotion value
+                value = self.emotion_model.get_emotion_value(self.emotional_state, specific)
+                self.emotion_model.set_emotion_value(temp_state, specific, value)
+                response.emotional_state = temp_state
             else:
                 response.success = False
                 response.error_message = f"Unknown emotion: {specific}"
-            
-            if response.success:
-                response.emotional_state = temp_state
         
         # Clear description if not requested
         if not request.include_description:
@@ -334,100 +289,46 @@ class EmotionalStateManager(Node):
     
     def modify_emotional_state(self, request, response):
         """Service to modify the current emotional state."""
-        self.get_logger().info(f"ALAINA: Emotional state modification: {request.modification_type}")
+        self.get_logger().info(f"ALAINA: Emotional state modification request: {request.modification_type}")
         
         response.success = True
         response.error_message = ""
         
-        # Handle different modification types
-        if request.modification_type == "reset":
-            # Reset to initial state
-            self.initialize_emotional_state()
-            self.emotional_state.source = "reset"
-            self.emotional_state.description = f"Reset due to: {request.reason}"
+        # Save original state in case we need to revert
+        original_state = utils.copy_emotional_state(self.emotional_state)
         
-        elif request.modification_type == "absolute":
-            # Set all emotions to the specified value
-            self.emotional_state.pleasure = utils.clamp(request.value)
-            self.emotional_state.arousal = utils.clamp(request.value)
-            self.emotional_state.dominance = utils.clamp(request.value)
-            self.emotional_state.happiness = utils.clamp(request.value, 0.0, 1.0)
-            self.emotional_state.sadness = utils.clamp(request.value, 0.0, 1.0)
-            self.emotional_state.anger = utils.clamp(request.value, 0.0, 1.0)
-            self.emotional_state.fear = utils.clamp(request.value, 0.0, 1.0)
-            self.emotional_state.disgust = utils.clamp(request.value, 0.0, 1.0)
-            self.emotional_state.surprise = utils.clamp(request.value, 0.0, 1.0)
-            self.emotional_state.source = "absolute_modification"
-            self.emotional_state.description = f"Absolute modification due to: {request.reason}"
+        # Store reason and source before modification
+        reason = request.reason if request.reason else "External modification"
+        source = f"{request.modification_type}_modification"
         
-        elif request.modification_type == "relative":
-            # Adjust all emotions by the specified value
-            self.emotional_state.pleasure = utils.clamp(self.emotional_state.pleasure + request.value)
-            self.emotional_state.arousal = utils.clamp(self.emotional_state.arousal + request.value)
-            self.emotional_state.dominance = utils.clamp(self.emotional_state.dominance + request.value)
-            self.emotional_state.happiness = utils.clamp(self.emotional_state.happiness + request.value, 0.0, 1.0)
-            self.emotional_state.sadness = utils.clamp(self.emotional_state.sadness + request.value, 0.0, 1.0)
-            self.emotional_state.anger = utils.clamp(self.emotional_state.anger + request.value, 0.0, 1.0)
-            self.emotional_state.fear = utils.clamp(self.emotional_state.fear + request.value, 0.0, 1.0)
-            self.emotional_state.disgust = utils.clamp(self.emotional_state.disgust + request.value, 0.0, 1.0)
-            self.emotional_state.surprise = utils.clamp(self.emotional_state.surprise + request.value, 0.0, 1.0)
-            self.emotional_state.source = "relative_modification"
-            self.emotional_state.description = f"Relative modification due to: {request.reason}"
-        
-        elif request.modification_type == "specific":
-            # Modify only the specific emotion
-            specific = request.specific_emotion.lower()
+        try:
+            # Use the emotion model to modify the state
+            self.emotional_state = self.emotion_model.modify_state(
+                self.emotional_state,
+                request.modification_type,
+                request.value,
+                request.specific_emotion
+            )
             
-            if specific == "pleasure":
-                self.emotional_state.pleasure = utils.clamp(request.value)
-            elif specific == "arousal":
-                self.emotional_state.arousal = utils.clamp(request.value)
-            elif specific == "dominance":
-                self.emotional_state.dominance = utils.clamp(request.value)
-            elif specific == "happiness":
-                self.emotional_state.happiness = utils.clamp(request.value, 0.0, 1.0)
-            elif specific == "sadness":
-                self.emotional_state.sadness = utils.clamp(request.value, 0.0, 1.0)
-            elif specific == "anger":
-                self.emotional_state.anger = utils.clamp(request.value, 0.0, 1.0)
-            elif specific == "fear":
-                self.emotional_state.fear = utils.clamp(request.value, 0.0, 1.0)
-            elif specific == "disgust":
-                self.emotional_state.disgust = utils.clamp(request.value, 0.0, 1.0)
-            elif specific == "surprise":
-                self.emotional_state.surprise = utils.clamp(request.value, 0.0, 1.0)
+            # Update source and description after modification
+            self.emotional_state.source = source
+            
+            if request.modification_type == "specific":
+                self.emotional_state.description = f"Modified {request.specific_emotion} due to: {reason}"
             else:
-                response.success = False
-                response.error_message = f"Unknown emotion: {specific}"
+                self.emotional_state.description = f"Modified emotional state due to: {reason}"
+                
+            # Update timestamp
+            self.emotional_state.timestamp = utils.get_current_time()
             
-            if response.success:
-                self.emotional_state.source = f"specific_modification:{specific}"
-                self.emotional_state.description = f"Modified {specific} due to: {request.reason}"
-        
-        else:
-            response.success = False
-            response.error_message = f"Unknown modification type: {request.modification_type}"
-        
-        # Update timestamp
-        self.emotional_state.timestamp = utils.get_current_time()
-        
-        # Calculate overall intensity
-        basic_emotions = [
-            self.emotional_state.happiness,
-            self.emotional_state.sadness,
-            self.emotional_state.anger,
-            self.emotional_state.fear,
-            self.emotional_state.disgust,
-            self.emotional_state.surprise
-        ]
-        self.emotional_state.intensity = sum(abs(e) for e in basic_emotions) / len(basic_emotions)
-        
-        # Update the primary emotion based on the modified state
-        self.update_primary_emotion()
-        
-        # Publish updated state
-        if response.success:
+            # Publish updated state
             self.state_publisher.publish(self.emotional_state)
+            
+        except ValueError as e:
+            response.success = False
+            response.error_message = str(e)
+            # Revert to original state
+            self.emotional_state = original_state
         
         # Set response
         response.updated_emotional_state = self.emotional_state
@@ -439,33 +340,27 @@ class EmotionalStateManager(Node):
         # Use the emotion model to determine the primary emotion
         primary_emotion = self.emotion_model.get_primary_emotion(self.emotional_state)
         
-        # If all emotions are below threshold, set to neutral
-        threshold = self.manager_config.get('threshold', 0.05)
-        basic_emotions = {
-            "happiness": self.emotional_state.happiness,
-            "sadness": self.emotional_state.sadness,
-            "anger": self.emotional_state.anger,
-            "fear": self.emotional_state.fear,
-            "disgust": self.emotional_state.disgust,
-            "surprise": self.emotional_state.surprise
-        }
-        max_emotion_value = max(basic_emotions.values())
-        if max_emotion_value < threshold:
-            primary_emotion = "neutral"
-        
-        # Log the values for debugging
-        self.get_logger().info(f"ALAINA: Emotion values - happiness: {basic_emotions['happiness']:.2f}, sadness: {basic_emotions['sadness']:.2f}, anger: {basic_emotions['anger']:.2f}, fear: {basic_emotions['fear']:.2f}")
-        
+        # Only log if the primary emotion has changed
+        if self.emotional_state.primary_emotion != primary_emotion:
+            # Log the basic emotion values for debugging
+            emotions = self.emotion_model.get_all_emotions()
+            emotion_values = ", ".join([f"{e}: {self.emotion_model.get_emotion_value(self.emotional_state, e):.2f}" for e in emotions])
+            self.get_logger().info(f"ALAINA: Emotion values - {emotion_values}")
+            self.get_logger().info(f"ALAINA: Primary emotion updated to: {primary_emotion}")
+            
         self.emotional_state.primary_emotion = primary_emotion
-        self.get_logger().info(f"ALAINA: Primary emotion updated to: {primary_emotion}")
 
 def main(args=None):
+    # Create the ROS log directory if it doesn't exist
+    os.makedirs('/root/.ros/log', exist_ok=True)
+    
     rclpy.init(args=args)
     node = EmotionalStateManager()
+    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("ALAINA: Keyboard interrupt, shutting down")
+        pass
     finally:
         node.destroy_node()
         rclpy.shutdown()

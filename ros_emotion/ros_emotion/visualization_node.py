@@ -134,15 +134,15 @@ class VisualizationNode(Node):
         marker.action = Marker.ADD
         
         # Position based on PAD values
-        marker.pose.position.x = self.current_emotional_state.pleasure
-        marker.pose.position.y = self.current_emotional_state.arousal
-        marker.pose.position.z = self.current_emotional_state.dominance
+        marker.pose.position.x = self.emotion_model.get_emotion_value(self.current_emotional_state, "pleasure")
+        marker.pose.position.y = self.emotion_model.get_emotion_value(self.current_emotional_state, "arousal")
+        marker.pose.position.z = self.emotion_model.get_emotion_value(self.current_emotional_state, "dominance")
         
         # Orientation (identity quaternion)
         marker.pose.orientation.w = 1.0
         
         # Size based on intensity
-        size = 0.1 + self.current_emotional_state.intensity * 0.2
+        size = 0.1 + self.emotion_model.calculate_intensity(self.current_emotional_state) * 0.2
         marker.scale.x = size
         marker.scale.y = size
         marker.scale.z = size
@@ -244,9 +244,9 @@ class VisualizationNode(Node):
             # Position (around the PAD point)
             angle = i * (2 * math.pi / max(1, len(self.active_ruminations)))
             radius = 0.3
-            marker.pose.position.x = self.current_emotional_state.pleasure + radius * math.cos(angle)
-            marker.pose.position.y = self.current_emotional_state.arousal + radius * math.sin(angle)
-            marker.pose.position.z = self.current_emotional_state.dominance
+            marker.pose.position.x = self.emotion_model.get_emotion_value(self.current_emotional_state, "pleasure") + radius * math.cos(angle)
+            marker.pose.position.y = self.emotion_model.get_emotion_value(self.current_emotional_state, "arousal") + radius * math.sin(angle)
+            marker.pose.position.z = self.emotion_model.get_emotion_value(self.current_emotional_state, "dominance")
             
             # Orientation (identity quaternion)
             marker.pose.orientation.w = 1.0
@@ -384,17 +384,23 @@ class VisualizationNode(Node):
         """Get a color representing the current emotional state."""
         color = ColorRGBA()
         
+        # Get values from the emotion model
+        pleasure = self.emotion_model.get_emotion_value(self.current_emotional_state, "pleasure")
+        arousal = self.emotion_model.get_emotion_value(self.current_emotional_state, "arousal")  
+        dominance = self.emotion_model.get_emotion_value(self.current_emotional_state, "dominance")
+        intensity = self.emotion_model.calculate_intensity(self.current_emotional_state)
+        
         # Red component based on pleasure (negative = more red)
-        color.r = 0.5 - self.current_emotional_state.pleasure * 0.5
+        color.r = 0.5 - pleasure * 0.5
         
         # Green component based on arousal (positive = more green)
-        color.g = 0.5 + self.current_emotional_state.arousal * 0.5
+        color.g = 0.5 + arousal * 0.5
         
         # Blue component based on dominance (positive = more blue)
-        color.b = 0.5 + self.current_emotional_state.dominance * 0.5
+        color.b = 0.5 + dominance * 0.5
         
         # Alpha based on intensity
-        color.a = 0.5 + self.current_emotional_state.intensity * 0.5
+        color.a = 0.5 + intensity * 0.5
         
         return color
     

@@ -122,9 +122,15 @@ class LLMIntegration(Node):
     def query_llm_for_sensory_processing(self, sensory_input, input_id):
         """Query LLM to analyze sensory input and determine emotional impact"""
         try:
-            # Log the current emotional state before building the prompt
-            self.get_logger().info(f"ALAINA: Current emotional state before processing - Pleasure: {self.current_emotional_state.pleasure:.2f}, Arousal: {self.current_emotional_state.arousal:.2f}")
-            self.get_logger().info(f"ALAINA: Current primary emotion: {self.current_emotional_state.primary_emotion}")
+            # If we have an existing emotional state, consider it when generating the response
+            if self.current_emotional_state:
+                pleasure = self.emotion_model.get_emotion_value(self.current_emotional_state, "pleasure")
+                arousal = self.emotion_model.get_emotion_value(self.current_emotional_state, "arousal")
+                self.get_logger().info(f"ALAINA: Current emotional state before processing - Pleasure: {pleasure:.2f}, Arousal: {arousal:.2f}")
+                
+                # Log primary emotion
+                primary_emotion = self.emotion_model.get_primary_emotion(self.current_emotional_state)
+                self.get_logger().info(f"ALAINA: Current primary emotion: {primary_emotion}")
             
             # Build prompt for the LLM
             prompt = self.build_sensory_processing_prompt(sensory_input)

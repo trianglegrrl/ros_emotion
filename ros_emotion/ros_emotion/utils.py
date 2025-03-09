@@ -82,4 +82,36 @@ def emotion_decay(value, decay_rate, dt):
         return max(0.0, value - decay_rate * dt)
     elif value < 0:
         return min(0.0, value + decay_rate * dt)
-    return 0.0 
+    return 0.0
+
+def copy_emotional_state(state):
+    """Create a deep copy of an EmotionalState message."""
+    from ros_emotion.msg import EmotionalState
+    
+    copy = EmotionalState()
+    
+    # Copy timestamp
+    copy.timestamp.sec = state.timestamp.sec
+    copy.timestamp.nanosec = state.timestamp.nanosec
+    
+    # Copy dimensional model values
+    copy.pleasure = state.pleasure
+    copy.arousal = state.arousal
+    copy.dominance = state.dominance
+    
+    # Copy basic emotion values
+    copy.happiness = state.happiness
+    copy.sadness = state.sadness
+    copy.anger = state.anger
+    copy.fear = state.fear
+    copy.disgust = state.disgust
+    copy.surprise = state.surprise
+    
+    # Copy other fields
+    copy.intensity = state.intensity
+    copy.confidence = state.confidence
+    copy.source = state.source
+    copy.description = state.description
+    copy.primary_emotion = state.primary_emotion
+    
+    return copy 
