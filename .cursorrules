@@ -1,0 +1,6 @@
+- Use best ROS practices for managing nodes.
+- Always run commands inside the docker container, and make sure you source the ros environment first
+- Use the cleanup_and_rebuild.sh and and start_all.sh scripts when you need to rebuild.
+- You should always search the repo if there are any questions about how something works.
+- We're using ROS foxy
+- ROS2 foxy does not support the `--once` flag for `ros2`
