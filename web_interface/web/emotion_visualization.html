@@ -615,6 +615,14 @@
                     all: messageHistory.all.slice(0, 500) // Only store last 500 of all messages
                 };
                 
+                // Filter out any emotion_visualization messages from 'all' array
+                if (storageData.all && Array.isArray(storageData.all)) {
+                    storageData.all = storageData.all.filter(item => {
+                        return item.topic !== 'emotion_visualization' && 
+                              item.topic !== '/emotion_visualization';
+                    });
+                }
+                
                 // Add the essential topics
                 essentialTopics.forEach(topicKey => {
                     if (messageHistory[topicKey]) {
@@ -647,6 +655,20 @@
                 const stored = localStorage.getItem('rosEmotionMessageHistory');
                 if (stored) {
                     const loaded = JSON.parse(stored);
+                    
+                    // Remove emotion_visualization topic if it exists in stored data
+                    if (loaded.emotion_visualization) {
+                        delete loaded.emotion_visualization;
+                    }
+                    
+                    // If the 'all' array exists, filter out emotion_visualization messages
+                    if (loaded.all && Array.isArray(loaded.all)) {
+                        loaded.all = loaded.all.filter(item => {
+                            return item.topic !== 'emotion_visualization' && 
+                                  item.topic !== '/emotion_visualization';
+                        });
+                    }
+                    
                     for (const topic in loaded) {
                         if (messageHistory[topic]) {
                             messageHistory[topic] = loaded[topic];
@@ -1192,6 +1214,7 @@
                     '/rosout',
                     '/parameter_events', 
                     '/clock',
+                    '/emotion_visualization', // Added this topic to exclude it
                     // Add other topics that you don't need to log
                 ];
                 
@@ -1211,6 +1234,13 @@
                     
                     // Create a new section in message history for this topic if not exists
                     const topicKey = topic.replace(/\//g, '_').substring(1); // Remove leading slash
+                    
+                    // Skip the emotion_visualization topic completely
+                    if (topicKey === 'emotion_visualization') {
+                        addDebugMessage(`Skipping emotion_visualization topic`);
+                        return;
+                    }
+                    
                     if (!messageHistory[topicKey]) {
                         messageHistory[topicKey] = [];
                         
@@ -1724,6 +1754,26 @@
             }
         });
         connectionOptions.appendChild(downloadRawButton);
+
+        // Also make sure it doesn't appear in the message history if it's already stored
+        document.addEventListener('DOMContentLoaded', function() {
+            // Remove emotion_visualization from history if it exists
+            if (messageHistory.emotion_visualization) {
+                delete messageHistory.emotion_visualization;
+            }
+            
+            // Remove the button for emotion_visualization if it exists
+            const emotionVisualizationTab = document.querySelector('.history-tab[data-tab="emotion_visualization"]');
+            if (emotionVisualizationTab) {
+                emotionVisualizationTab.remove();
+            }
+            
+            // Remove the option from the filter dropdown
+            const emotionVisualizationOption = document.querySelector('#historyTopicFilter option[value="emotion_visualization"]');
+            if (emotionVisualizationOption) {
+                emotionVisualizationOption.remove();
+            }
+        });
     </script>
 </body>
 </html> 

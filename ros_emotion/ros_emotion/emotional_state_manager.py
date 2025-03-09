@@ -14,23 +14,28 @@ class EmotionalStateManager(Node):
         super().__init__('emotional_state_manager')
         
         # Load configuration
-        self.config = utils.load_config(self)
-        self.manager_config = self.config.get('emotional_state_manager', {})
+        self.manager_config = utils.load_config(self, 'emotion_config.yaml').get('emotional_state_manager', {})
         
-        # Initialize emotional state
+        # Create the emotional state object
         self.emotional_state = EmotionalState()
         self.initialize_emotional_state()
         
-        # Create publishers
+        # Initialize tracking variables
+        self.last_update_time = self.get_clock().now()
+        self.count = 0  # For logging frequency control
+        
+        # Define QoS profile for reliable communication
         qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
+        
+        # Publisher for emotional state
         self.state_publisher = self.create_publisher(
-            EmotionalState, 
-            'emotional_state', 
-            qos
+            EmotionalState,
+            'emotional_state',
+            10
         )
         
         # Create subscribers
@@ -68,9 +73,6 @@ class EmotionalStateManager(Node):
             self.update_emotional_state
         )
         
-        # Track last update time for decay calculations
-        self.last_update_time = self.get_clock().now()
-        
         self.get_logger().info("ALAINA: Emotional State Manager initialized")
     
     def initialize_emotional_state(self):
@@ -98,93 +100,101 @@ class EmotionalStateManager(Node):
         self.get_logger().info("ALAINA: Emotional state initialized")
     
     def update_emotional_state(self):
-        """Update the emotional state (apply decay, etc.)."""
-        now = self.get_clock().now()
-        dt = (now - self.last_update_time).nanoseconds / 1e9  # Convert to seconds
-        self.last_update_time = now
+        """Update the emotional state based on decay rates and publish the current state."""
+        # Get the current time
+        current_time = self.get_clock().now()
+        
+        # Calculate time difference in seconds
+        time_diff = (current_time - self.last_update_time).nanoseconds / 1e9
+        self.last_update_time = current_time
         
         # Apply decay to emotional dimensions
         decay_rates = self.manager_config.get('decay_rates', {})
-        threshold = self.manager_config.get('threshold', 0.05)
         
-        # Apply decay to each dimension
+        # Update dimensional model
         self.emotional_state.pleasure = utils.emotion_decay(
             self.emotional_state.pleasure, 
             decay_rates.get('pleasure', 0.01), 
-            dt
+            time_diff
         )
         
         self.emotional_state.arousal = utils.emotion_decay(
             self.emotional_state.arousal, 
             decay_rates.get('arousal', 0.02), 
-            dt
+            time_diff
         )
         
         self.emotional_state.dominance = utils.emotion_decay(
             self.emotional_state.dominance, 
             decay_rates.get('dominance', 0.005), 
-            dt
+            time_diff
         )
         
-        # Apply decay to basic emotions
+        # Update basic emotions
         self.emotional_state.happiness = utils.emotion_decay(
             self.emotional_state.happiness, 
             decay_rates.get('happiness', 0.02), 
-            dt
+            time_diff
         )
         
         self.emotional_state.sadness = utils.emotion_decay(
             self.emotional_state.sadness, 
             decay_rates.get('sadness', 0.01), 
-            dt
+            time_diff
         )
         
         self.emotional_state.anger = utils.emotion_decay(
             self.emotional_state.anger, 
             decay_rates.get('anger', 0.03), 
-            dt
+            time_diff
         )
         
         self.emotional_state.fear = utils.emotion_decay(
             self.emotional_state.fear, 
             decay_rates.get('fear', 0.02), 
-            dt
+            time_diff
         )
         
         self.emotional_state.disgust = utils.emotion_decay(
             self.emotional_state.disgust, 
             decay_rates.get('disgust', 0.01), 
-            dt
+            time_diff
         )
         
         self.emotional_state.surprise = utils.emotion_decay(
             self.emotional_state.surprise, 
-            decay_rates.get('surprise', 0.04), 
-            dt
+            decay_rates.get('surprise', 0.05), 
+            time_diff
         )
         
-        # Calculate overall emotional intensity
-        self.emotional_state.intensity = min(1.0, max(
-            abs(self.emotional_state.pleasure),
-            abs(self.emotional_state.arousal),
-            abs(self.emotional_state.dominance),
-            self.emotional_state.happiness,
-            self.emotional_state.sadness,
-            self.emotional_state.anger,
-            self.emotional_state.fear,
-            self.emotional_state.disgust,
-            self.emotional_state.surprise
-        ))
+        # Update overall intensity
+        self.emotional_state.intensity = (abs(self.emotional_state.pleasure) + 
+                                       abs(self.emotional_state.arousal) + 
+                                       abs(self.emotional_state.dominance)) / 3.0
         
-        # Update the primary emotion based on the highest emotion value
+        # Update timestamp
+        self.emotional_state.timestamp = utils.get_current_time()
+        
+        # Update primary emotion
         self.update_primary_emotion()
         
-        # Update the timestamp
-        self.emotional_state.timestamp = utils.get_current_time()
-        self.emotional_state.source = "decay_update"
-        
-        # Publish updated state
+        # Ensure primary emotion is set before publishing
+        if not hasattr(self.emotional_state, 'primary_emotion') or not self.emotional_state.primary_emotion:
+            self.update_primary_emotion()
+            self.get_logger().warn("ALAINA: Had to set primary_emotion before publishing")
+            
+        # Publish current state
         self.state_publisher.publish(self.emotional_state)
+        
+        # Debug log
+        if self.count % 10 == 0:  # only log every 10th update to reduce spam
+            self.get_logger().info(
+                f"ALAINA: Emotional state: P={self.emotional_state.pleasure:.2f}, " +
+                f"A={self.emotional_state.arousal:.2f}, D={self.emotional_state.dominance:.2f}, " +
+                f"Primary={self.emotional_state.primary_emotion}"
+            )
+            
+        self.count += 1
     
     def sensory_input_callback(self, msg):
         """Process incoming sensory input."""
@@ -435,6 +445,9 @@ class EmotionalStateManager(Node):
         threshold = self.manager_config.get('threshold', 0.05)
         if emotions[primary_emotion] < threshold:
             primary_emotion = "neutral"
+        
+        # Log the values for debugging
+        self.get_logger().info(f"ALAINA: Emotion values - happiness: {emotions['happiness']:.2f}, sadness: {emotions['sadness']:.2f}, anger: {emotions['anger']:.2f}, fear: {emotions['fear']:.2f}")
         
         self.emotional_state.primary_emotion = primary_emotion
         self.get_logger().info(f"ALAINA: Primary emotion updated to: {primary_emotion}")

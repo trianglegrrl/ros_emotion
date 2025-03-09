@@ -165,7 +165,7 @@
                 <button id="connectButton">Connect</button>
             </div>
             <div class="auto-refresh">
-                <input type="checkbox" id="autoRefreshTopics" checked>
+                <input type="checkbox" id="autoRefreshTopics">
                 <label for="autoRefreshTopics">Auto-refresh topics (5s)</label>
             </div>
         </div>
@@ -440,6 +440,9 @@
                 const wsUrl = document.getElementById('wsUrlInput').value;
                 initRosConnection(wsUrl);
             }, 1000);
+            
+            // Make sure auto-refresh is off by default
+            document.getElementById('autoRefreshTopics').checked = false;
         });
     </script>
 </body>

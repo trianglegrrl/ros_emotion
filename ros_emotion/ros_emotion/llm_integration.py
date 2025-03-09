@@ -57,7 +57,7 @@ class LLMIntegration(Node):
         # Service client for modifying emotional state
         self.emotion_modify_client = self.create_client(
             EmotionModify,
-            '/modify_emotional_state'
+            'modify_emotional_state'
         )
         
         # Store the current emotional state
@@ -88,9 +88,24 @@ class LLMIntegration(Node):
         self.get_logger().info("ALAINA: LLM Integration initialized")
     
     def emotional_state_callback(self, msg):
-        """Store the current emotional state."""
+        """Store the latest emotional state."""
         self.current_emotional_state = msg
-        self.get_logger().debug(f"ALAINA: Updated emotional state: {msg.description}")
+        
+        # Ensure primary_emotion is set, even if missing in the message
+        if not hasattr(self.current_emotional_state, 'primary_emotion') or not self.current_emotional_state.primary_emotion:
+            emotions = {
+                "happiness": self.current_emotional_state.happiness,
+                "sadness": self.current_emotional_state.sadness,
+                "anger": self.current_emotional_state.anger,
+                "fear": self.current_emotional_state.fear,
+                "disgust": self.current_emotional_state.disgust,
+                "surprise": self.current_emotional_state.surprise
+            }
+            if any(emotions.values()):
+                self.current_emotional_state.primary_emotion = max(emotions.items(), key=lambda x: x[1])[0]
+            else:
+                self.current_emotional_state.primary_emotion = "neutral"
+            self.get_logger().info(f"ALAINA: Added missing primary_emotion: {self.current_emotional_state.primary_emotion}")
     
     def sensory_input_callback(self, msg):
         """Process sensory input using LLM"""
@@ -111,6 +126,10 @@ class LLMIntegration(Node):
     def query_llm_for_sensory_processing(self, sensory_input, input_id):
         """Query LLM to analyze sensory input and determine emotional impact"""
         try:
+            # Log the current emotional state before building the prompt
+            self.get_logger().info(f"ALAINA: Current emotional state before processing - Pleasure: {self.current_emotional_state.pleasure:.2f}, Arousal: {self.current_emotional_state.arousal:.2f}")
+            self.get_logger().info(f"ALAINA: Current primary emotion: {self.current_emotional_state.primary_emotion}")
+            
             # Build prompt for the LLM
             prompt = self.build_sensory_processing_prompt(sensory_input)
             
@@ -127,6 +146,9 @@ class LLMIntegration(Node):
                 return None
         except Exception as e:
             self.get_logger().error(f"ALAINA: Error querying LLM for sensory processing: {str(e)}")
+            # Add traceback for more detailed error information
+            import traceback
+            self.get_logger().error(f"ALAINA: Traceback: {traceback.format_exc()}")
             return None
     
     def build_sensory_processing_prompt(self, sensory_input):

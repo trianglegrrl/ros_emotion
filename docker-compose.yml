@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   ros_emotion:
     build:
@@ -32,6 +30,7 @@ services:
       - "9090:9090"
     volumes:
       - ./web_interface/web:/var/www/html
+      - ./ros_emotion:/ros_ws/src/ros_emotion
     depends_on:
       - ros_emotion
     # Override the default command to make sure the entrypoint is called
