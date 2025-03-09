@@ -455,8 +455,54 @@
         .emotional-description-container h3 {
             margin-top: 0;
             color: #495057;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
         }
-
+        
+        .emotional-description-container h3::after {
+            content: '▼';
+            font-size: 0.8em;
+            transition: transform 0.3s;
+        }
+        
+        .emotional-description-container.collapsed h3::after {
+            transform: rotate(-90deg);
+        }
+        
+        .emotional-description-content {
+            height: 80px;
+            max-height: 80px;
+            overflow-y: auto;
+            transition: max-height 0.3s ease;
+            scrollbar-width: thin;
+        }
+        
+        .emotional-description-container.collapsed .emotional-description-content {
+            max-height: 0;
+            overflow: hidden;
+        }
+        
+        /* Customize scrollbar */
+        .emotional-description-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .emotional-description-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .emotional-description-content::-webkit-scrollbar-thumb {
+            background: #c1d3ea;
+            border-radius: 3px;
+        }
+        
+        .emotional-description-content::-webkit-scrollbar-thumb:hover {
+            background: #a3bedf;
+        }
+        
         /* Chart Specific Styles */
         canvas {
             width: 100% !important;
@@ -651,9 +697,11 @@
             </div>
             
             <!-- Moved description outside the emotional state container -->
-            <div class="emotional-description-container" id="emotional-description">
-                <h3>Description</h3>
-                <p id="emotion-description-text">No emotional state received yet.</p>
+            <div class="emotional-description-container collapsed" id="emotional-description">
+                <h3 id="description-toggle">Description</h3>
+                <div class="emotional-description-content">
+                    <p id="emotion-description-text">No emotional state received yet.</p>
+                </div>
             </div>
             
             <!-- Add Personality Model Section -->
@@ -908,6 +956,14 @@
                     e.preventDefault(); // Prevent newline in textarea
                     sendSensoryInput();
                 }
+            });
+            
+            // Add event listener for toggling the description section
+            const descriptionToggle = document.getElementById('description-toggle');
+            const descriptionContainer = document.getElementById('emotional-description');
+            
+            descriptionToggle.addEventListener('click', function() {
+                descriptionContainer.classList.toggle('collapsed');
             });
         });
         
