@@ -1,23 +1,21 @@
 #!/bin/bash
 
-echo "Cleaning up all existing containers..."
-# Stop and remove any existing containers
-docker stop ros_emotion_container ros_web_interface_container ros_test_publisher_container || true
-docker rm ros_emotion_container ros_web_interface_container ros_test_publisher_container || true
+# Stop all containers
+echo "Stopping all containers..."
+docker-compose down
 
-# Also remove any containers based on our images
-docker rm $(docker ps -aq --filter ancestor=ros_emotion --filter ancestor=ros_web_interface --filter ancestor=ros_test_publisher) 2>/dev/null || true
+# Remove all images
+echo "Removing Docker images..."
+docker rmi $(docker images -q ros_emotion_*) 2>/dev/null || true
 
-echo "Removing all related Docker images..."
-# Remove all related Docker images to ensure clean rebuild
-docker rmi ros_emotion ros_web_interface ros_test_publisher 2>/dev/null || true
-
-echo "Rebuilding everything from scratch..."
-
-# Build and start the containers
-echo "Building and starting the containers with Docker Compose..."
-docker-compose build --no-cache
+# Rebuild and start
+echo "Rebuilding and starting containers..."
+docker-compose build
 docker-compose up -d
+
+# Show logs
+echo "Showing logs from ros_emotion_container..."
+docker logs -f ros_emotion_container
 
 echo ""
 echo "ROS Emotion system has been rebuilt and is running!"

@@ -1,0 +1,457 @@
+<!-- Personality Model Visualization -->
+<div class="personality-container">
+    <h3>Personality Model</h3>
+    <div class="personality-traits">
+        <div class="trait-radar-container">
+            <canvas id="personalityRadarChart"></canvas>
+        </div>
+        <div class="trait-meters">
+            <div class="trait-meter">
+                <div class="trait-label">Openness</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="openness-bar" style="width: 70%;">0.70</div>
+                </div>
+            </div>
+            <div class="trait-meter">
+                <div class="trait-label">Conscientiousness</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="conscientiousness-bar" style="width: 60%;">0.60</div>
+                </div>
+            </div>
+            <div class="trait-meter">
+                <div class="trait-label">Extraversion</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="extraversion-bar" style="width: 70%;">0.70</div>
+                </div>
+            </div>
+            <div class="trait-meter">
+                <div class="trait-label">Agreeableness</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="agreeableness-bar" style="width: 80%;">0.80</div>
+                </div>
+            </div>
+            <div class="trait-meter">
+                <div class="trait-label">Neuroticism</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="neuroticism-bar" style="width: 30%;">0.30</div>
+                </div>
+            </div>
+        </div>
+        <div class="secondary-traits">
+            <div class="trait-meter">
+                <div class="trait-label">Risk Tolerance</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="risk-bar" style="width: 50%;">0.50</div>
+                </div>
+            </div>
+            <div class="trait-meter">
+                <div class="trait-label">Adaptability</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="adaptability-bar" style="width: 70%;">0.70</div>
+                </div>
+            </div>
+            <div class="trait-meter">
+                <div class="trait-label">Creativity</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="creativity-bar" style="width: 80%;">0.80</div>
+                </div>
+            </div>
+            <div class="trait-meter">
+                <div class="trait-label">Resilience</div>
+                <div class="trait-bar-container">
+                    <div class="trait-bar" id="resilience-bar" style="width: 70%;">0.70</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="personality-controls">
+        <div class="personality-control-header">
+            <h4>Modify Traits</h4>
+            <button id="resetPersonalityBtn" class="small-button">Reset to Default</button>
+        </div>
+        <div class="trait-sliders">
+            <div class="trait-slider">
+                <label for="openness-slider">Openness:</label>
+                <input type="range" id="openness-slider" min="0" max="1" step="0.05" value="0.7">
+                <span class="slider-value" id="openness-value">0.70</span>
+            </div>
+            <div class="trait-slider">
+                <label for="conscientiousness-slider">Conscientiousness:</label>
+                <input type="range" id="conscientiousness-slider" min="0" max="1" step="0.05" value="0.6">
+                <span class="slider-value" id="conscientiousness-value">0.60</span>
+            </div>
+            <div class="trait-slider">
+                <label for="extraversion-slider">Extraversion:</label>
+                <input type="range" id="extraversion-slider" min="0" max="1" step="0.05" value="0.7">
+                <span class="slider-value" id="extraversion-value">0.70</span>
+            </div>
+            <div class="trait-slider">
+                <label for="agreeableness-slider">Agreeableness:</label>
+                <input type="range" id="agreeableness-slider" min="0" max="1" step="0.05" value="0.8">
+                <span class="slider-value" id="agreeableness-value">0.80</span>
+            </div>
+            <div class="trait-slider">
+                <label for="neuroticism-slider">Neuroticism:</label>
+                <input type="range" id="neuroticism-slider" min="0" max="1" step="0.05" value="0.3">
+                <span class="slider-value" id="neuroticism-value">0.30</span>
+            </div>
+            <button id="applyPersonalityBtn">Apply Changes</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Personality radar chart initialization
+    function initPersonalityRadarChart() {
+        const ctx = document.getElementById('personalityRadarChart').getContext('2d');
+        
+        const personalityRadarChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Openness', 'Conscientiousness', 'Extraversion', 'Agreeableness', 'Neuroticism'],
+                datasets: [{
+                    label: 'Personality Traits',
+                    data: [0.7, 0.6, 0.7, 0.8, 0.3],
+                    backgroundColor: 'rgba(111, 66, 193, 0.2)',
+                    borderColor: 'rgba(111, 66, 193, 1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(111, 66, 193, 1)',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: 'rgba(111, 66, 193, 1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    r: {
+                        angleLines: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        },
+                        ticks: {
+                            beginAtZero: true,
+                            max: 1,
+                            stepSize: 0.2,
+                            backdropColor: 'transparent'
+                        },
+                        pointLabels: {
+                            font: {
+                                size: 12,
+                                weight: 'bold'
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        return personalityRadarChart;
+    }
+    
+    // Update personality trait bars
+    function updateTraitBars(traits) {
+        for (const trait in traits) {
+            const value = traits[trait];
+            const traitBar = document.getElementById(`${trait.toLowerCase()}-bar`);
+            
+            if (traitBar) {
+                traitBar.style.width = `${value * 100}%`;
+                traitBar.textContent = value.toFixed(2);
+            }
+        }
+    }
+    
+    // Initialize slider events
+    function initPersonalityControls() {
+        const traitSliders = document.querySelectorAll('.trait-slider input[type="range"]');
+        
+        traitSliders.forEach(slider => {
+            const valueDisplay = document.getElementById(`${slider.id.split('-')[0]}-value`);
+            
+            slider.addEventListener('input', function() {
+                valueDisplay.textContent = parseFloat(this.value).toFixed(2);
+            });
+        });
+        
+        // Apply button event handler
+        document.getElementById('applyPersonalityBtn').addEventListener('click', function() {
+            const traits = {
+                openness: parseFloat(document.getElementById('openness-slider').value),
+                conscientiousness: parseFloat(document.getElementById('conscientiousness-slider').value),
+                extraversion: parseFloat(document.getElementById('extraversion-slider').value),
+                agreeableness: parseFloat(document.getElementById('agreeableness-slider').value),
+                neuroticism: parseFloat(document.getElementById('neuroticism-slider').value)
+            };
+            
+            // Update the UI
+            updateTraitBars(traits);
+            
+            // Update radar chart
+            updatePersonalityRadarChart(traits);
+            
+            // Send to ROS
+            sendPersonalityUpdate(traits);
+        });
+        
+        // Reset button
+        document.getElementById('resetPersonalityBtn').addEventListener('click', function() {
+            fetchDefaultPersonality();
+        });
+    }
+    
+    // Update radar chart with new values
+    function updatePersonalityRadarChart(traits) {
+        if (!window.personalityRadarChart) return;
+        
+        window.personalityRadarChart.data.datasets[0].data = [
+            traits.openness,
+            traits.conscientiousness,
+            traits.extraversion, 
+            traits.agreeableness,
+            traits.neuroticism
+        ];
+        
+        window.personalityRadarChart.update();
+    }
+    
+    // Send personality update to ROS
+    function sendPersonalityUpdate(traits) {
+        if (!ros) {
+            addMessageToLog('Cannot update personality: Not connected to ROS', 'error');
+            return;
+        }
+        
+        // For each trait, call the modify_emotional_state service
+        for (const trait in traits) {
+            const modifyClient = new ROSLIB.Service({
+                ros: ros,
+                name: '/modify_emotional_state',
+                serviceType: 'ros_emotion/srv/ModifyEmotionalState'
+            });
+            
+            const request = new ROSLIB.ServiceRequest({
+                modification_type: 'personality_trait',
+                specific_emotion: trait.toLowerCase(),
+                value: traits[trait],
+                reason: 'Manual adjustment from web interface',
+                override_safety: false
+            });
+            
+            modifyClient.callService(request, function(result) {
+                if (result.success) {
+                    addMessageToLog(`Updated personality trait ${trait} to ${traits[trait].toFixed(2)}`, 'state-change');
+                    addDebugMessage(`Personality trait ${trait} updated successfully`);
+                } else {
+                    addMessageToLog(`Failed to update ${trait}: ${result.message}`, 'error');
+                }
+            }, function(error) {
+                addMessageToLog(`Error updating ${trait}: Service call failed`, 'error');
+                addDebugMessage(`Service call error: ${error}`);
+            });
+        }
+    }
+    
+    // Fetch default personality from ROS
+    function fetchDefaultPersonality() {
+        if (!ros) {
+            addMessageToLog('Cannot fetch personality: Not connected to ROS', 'error');
+            return;
+        }
+        
+        const queryClient = new ROSLIB.Service({
+            ros: ros,
+            name: '/query_emotional_state',
+            serviceType: 'ros_emotion/srv/EmotionQuery'
+        });
+        
+        const request = new ROSLIB.ServiceRequest({
+            query_type: 'full',
+            specific_emotion: '',
+            include_description: true
+        });
+        
+        queryClient.callService(request, function(result) {
+            if (result) {
+                // Parse personality traits from metadata
+                try {
+                    const metadata = JSON.parse(result.emotional_state.metadata || '{}');
+                    if (metadata.personality_traits) {
+                        updatePersonalityDisplay(metadata.personality_traits);
+                        addDebugMessage('Updated personality display with data from ROS');
+                    }
+                } catch (e) {
+                    addDebugMessage(`Error parsing personality traits: ${e.message}`);
+                }
+            }
+        }, function(error) {
+            addMessageToLog('Failed to fetch personality data', 'error');
+            addDebugMessage(`Service call error: ${error}`);
+        });
+    }
+    
+    // Update personality display with data from ROS
+    function updatePersonalityDisplay(traits) {
+        // Update sliders
+        for (const trait in traits) {
+            const slider = document.getElementById(`${trait.toLowerCase()}-slider`);
+            const valueDisplay = document.getElementById(`${trait.toLowerCase()}-value`);
+            
+            if (slider) {
+                slider.value = traits[trait];
+                if (valueDisplay) {
+                    valueDisplay.textContent = traits[trait].toFixed(2);
+                }
+            }
+        }
+        
+        // Update bars
+        updateTraitBars(traits);
+        
+        // Update radar chart (only OCEAN traits)
+        const radarData = {
+            openness: traits.openness || 0,
+            conscientiousness: traits.conscientiousness || 0,
+            extraversion: traits.extraversion || 0,
+            agreeableness: traits.agreeableness || 0,
+            neuroticism: traits.neuroticism || 0
+        };
+        
+        updatePersonalityRadarChart(radarData);
+    }
+    
+    // Initialize personality display when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        window.personalityRadarChart = initPersonalityRadarChart();
+        initPersonalityControls();
+    });
+    
+    // Update personality data when connected to ROS
+    ros.on('connection', function() {
+        setTimeout(fetchDefaultPersonality, 2000); // Fetch after connection is established
+    });
+</script>
+
+<style>
+    /* Personality Visualization Styles */
+    .personality-container {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #f8f3ff;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .personality-container h3 {
+        margin-top: 0;
+        color: #495057;
+        margin-bottom: 15px;
+    }
+    
+    .personality-traits {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+    
+    .trait-radar-container {
+        flex: 1;
+        min-width: 300px;
+        height: 300px;
+        position: relative;
+    }
+    
+    .trait-meters {
+        flex: 1;
+        min-width: 300px;
+    }
+    
+    .secondary-traits {
+        flex: 1;
+        min-width: 300px;
+    }
+    
+    .trait-meter {
+        margin-bottom: 15px;
+    }
+    
+    .trait-label {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .trait-bar-container {
+        height: 25px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .trait-bar {
+        height: 100%;
+        background-color: #6f42c1;
+        color: white;
+        text-align: center;
+        line-height: 25px;
+        font-size: 0.9em;
+        transition: width 0.3s ease;
+    }
+    
+    .personality-controls {
+        margin-top: 20px;
+        border-top: 1px solid #dee2e6;
+        padding-top: 15px;
+    }
+    
+    .personality-control-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
+    .personality-control-header h4 {
+        margin: 0;
+    }
+    
+    .small-button {
+        font-size: 0.8em;
+        padding: 3px 8px;
+    }
+    
+    .trait-sliders {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .trait-slider {
+        display: flex;
+        align-items: center;
+    }
+    
+    .trait-slider label {
+        width: 150px;
+    }
+    
+    .trait-slider input[type="range"] {
+        flex: 1;
+        margin: 0 10px;
+    }
+    
+    .slider-value {
+        width: 40px;
+        text-align: right;
+    }
+    
+    #applyPersonalityBtn {
+        align-self: flex-end;
+        margin-top: 10px;
+    }
+</style> 

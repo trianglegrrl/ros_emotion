@@ -1,0 +1,6 @@
+waiting for service to become available...
+requester: making request: ros_emotion.srv.EmotionQuery_Request(query_type='full', specific_emotion='', include_description=True)
+
+response:
+ros_emotion.srv.EmotionQuery_Response(success=True, error_message='', emotional_state=ros_emotion.msg.EmotionalState(timestamp=builtin_interfaces.msg.Time(sec=0, nanosec=0), pleasure=0.02955980971455574, arousal=-0.004667848814278841, dominance=0.9925439953804016, happiness=0.028272122144699097, sadness=-0.0029499991796910763, anger=-0.008950000628829002, fear=-0.019850000739097595, disgust=0.0, surprise=0.018484463915228844, intensity=0.10329528152942657, confidence=1.0, source='rumination:8551b65d-69d1-4de7-8540-ef636bc6de47', description='Beginning to ruminate on neutral state. Personality traits (creativity dominant) influence this emotional state. (Adjusted for goals.). Influenced by openness. Personality traits (creativity dominant) influence this emotional state. (Adjusted for goals.). Influenced by openness. Personality: Openness: exploratory (0.60) | Conscientiousness: organized (0.60) | Extraversion: ambivert (0.45) | Agreeableness: neutral (0.55) | Neuroticism: reactive (0.60) | Risk_tolerance: 0.50 | Adaptability: 0.70 | Creativity: 0.80 | Resilience: 0.70', primary_emotion='neutral'))
+

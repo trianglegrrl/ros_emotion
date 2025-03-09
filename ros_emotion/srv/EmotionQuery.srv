@@ -1,0 +1,22 @@
+# Service to query the current emotional state
+
+# Request:
+# Type of query
+string query_type  # "full", "dimensional", "categorical", "specific"
+
+# Specific emotion to query (if query_type is "specific")
+string specific_emotion
+
+# Whether to include description in the response
+bool include_description
+
+---
+# Response:
+# Success flag
+bool success
+
+# Error message if not successful
+string error_message
+
+# Current emotional state
+ros_emotion/EmotionalState emotional_state 

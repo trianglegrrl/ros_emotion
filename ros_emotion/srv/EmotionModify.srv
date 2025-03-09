@@ -1,0 +1,28 @@
+# Service to modify the current emotional state
+
+# Request:
+# Type of modification
+string modification_type  # "absolute", "relative", "reset", "specific"
+
+# Specific emotion to modify (if modification_type is "specific")
+string specific_emotion
+
+# Value for the modification
+float32 value
+
+# Reason for modification
+string reason
+
+# Override safety checks
+bool override_safety
+
+---
+# Response:
+# Success flag
+bool success
+
+# Error message if not successful
+string error_message
+
+# Updated emotional state
+ros_emotion/EmotionalState updated_emotional_state 

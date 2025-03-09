@@ -1,0 +1,2659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            display: flex;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .main-container {
+            flex: 1;
+            padding: 20px;
+            transition: margin-left 0.3s;
+        }
+        .sidebar {
+            width: 240px;
+            height: 100vh;
+            background-color: #333;
+            position: fixed;
+            left: 0;
+            top: 0;
+            color: white;
+            padding: 20px 0;
+            overflow-y: auto;
+            transform: translateX(-240px);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+        .sidebar.open {
+            transform: translateX(0);
+        }
+        .sidebar-header {
+            padding: 0 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .sidebar-header h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            padding: 0 10px;
+        }
+        .sidebar-nav a {
+            color: white;
+            text-decoration: none;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .sidebar-nav a:hover {
+            background-color: #555;
+        }
+        .hamburger {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 1001;
+            cursor: pointer;
+            background-color: #333;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .visualization-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            margin-top: 20px;
+            flex-wrap: nowrap;
+            gap: 20px;
+        }
+        .chart-container {
+            flex: 1;
+            min-width: calc(50% - 20px);
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .chart-title {
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #495057;
+        }
+        .connection-options {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f8ff;
+            border-radius: 4px;
+        }
+        .connection-options input {
+            padding: 8px;
+            margin-right: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0069d9;
+        }
+        .emotion-state {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .emotion-state h3 {
+            margin-top: 0;
+            color: #495057;
+        }
+        .pad-model {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .pad-value {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 30%;
+        }
+        .pad-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .pad-meter {
+            width: 100%;
+            height: 30px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .pad-fill {
+            height: 100%;
+            position: absolute;
+            transition: width 0.3s ease, left 0.3s ease, background-color 0.3s ease;
+        }
+        .debug-info {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .rumination-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .rumination-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #6c757d;
+            background-color: #e9ecef;
+            border-radius: 4px;
+        }
+        .history-chart {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+        .sensory-input-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff3cd;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .sensory-input-form {
+            display: flex;
+            flex-direction: column;
+        }
+        .sensory-input-form textarea {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            height: 60px;
+            min-height: 60px;
+            resize: vertical;
+            font-size: 14px;
+        }
+        .sensory-input-form button {
+            align-self: flex-end;
+            margin-top: 5px;
+        }
+        .message-log {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .message-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid #6c757d;
+            background-color: #e9ecef;
+            border-radius: 2px;
+        }
+        .message-item.sensory-input {
+            border-left-color: #fd7e14;
+        }
+        .message-item.state-change {
+            border-left-color: #20c997;
+        }
+        .message-item.rumination {
+            border-left-color: #6f42c1;
+        }
+        
+        /* Message History Styles */
+        .message-history-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .message-history-nav {
+            display: flex;
+            margin-bottom: 10px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .message-history-nav button {
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .message-history-nav button:hover {
+            background-color: #dee2e6;
+        }
+        
+        .message-history-nav button.active {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .message-history-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background-color: white;
+        }
+        
+        .message-history-toolbar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .message-history-search {
+            flex-grow: 1;
+            max-width: 300px;
+        }
+        
+        .message-history-search input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        
+        .message-history-filter select {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        
+        .message-history-pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+            gap: 5px;
+        }
+        
+        .message-history-pagination button {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #dee2e6;
+            background-color: white;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .message-history-pagination button:hover {
+            background-color: #e9ecef;
+        }
+        
+        .message-history-pagination button.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .message-history-counter {
+            font-size: 0.9em;
+            color: #6c757d;
+            text-align: right;
+            margin-top: 5px;
+        }
+        
+        .history-topic {
+            font-weight: bold;
+            color: #495057;
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        
+        .export-button {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .clear-button {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        /* Toggle Switch Styles */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch-checkbox {
+            height: 0;
+            width: 0;
+            visibility: hidden;
+            position: absolute;
+        }
+        
+        .toggle-switch-label {
+            cursor: pointer;
+            text-indent: -9999px;
+            width: 50px;
+            height: 24px;
+            background: #ccc;
+            display: block;
+            border-radius: 24px;
+            position: relative;
+        }
+        
+        .toggle-switch-label:after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 20px;
+            transition: 0.3s;
+        }
+        
+        .toggle-switch-checkbox:checked + .toggle-switch-label {
+            background: #28a745;
+        }
+        
+        .toggle-switch-checkbox:checked + .toggle-switch-label:after {
+            left: calc(100% - 2px);
+            transform: translateX(-100%);
+        }
+        
+        /* Emotional Description Container */
+        .emotional-description-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f0f8ff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .emotional-description-container h3 {
+            margin-top: 0;
+            color: #495057;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .emotional-description-container h3::after {
+            content: '▼';
+            font-size: 0.8em;
+            transition: transform 0.3s;
+        }
+        
+        .emotional-description-container.collapsed h3::after {
+            transform: rotate(-90deg);
+        }
+        
+        .emotional-description-content {
+            height: 80px;
+            max-height: 80px;
+            overflow-y: auto;
+            transition: max-height 0.3s ease;
+            scrollbar-width: thin;
+        }
+        
+        .emotional-description-container.collapsed .emotional-description-content {
+            max-height: 0;
+            overflow: hidden;
+        }
+        
+        /* Customize scrollbar */
+        .emotional-description-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .emotional-description-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .emotional-description-content::-webkit-scrollbar-thumb {
+            background: #c1d3ea;
+            border-radius: 3px;
+        }
+        
+        .emotional-description-content::-webkit-scrollbar-thumb:hover {
+            background: #a3bedf;
+        }
+        
+        /* Chart Specific Styles */
+        canvas {
+            width: 100% !important;
+            height: 250px !important;
+            max-width: 100%;
+        }
+        
+        /* Personality Visualization Styles */
+        .personality-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f3ff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .personality-container h3 {
+            margin-top: 0;
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        
+        .personality-traits {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        .trait-radar-container {
+            flex: 1;
+            min-width: 300px;
+            height: 300px;
+            position: relative;
+        }
+        
+        .trait-meters {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .secondary-traits {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .trait-meter {
+            margin-bottom: 15px;
+        }
+        
+        .trait-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .trait-bar-container {
+            height: 25px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .trait-bar {
+            height: 100%;
+            background-color: #6f42c1;
+            color: white;
+            text-align: center;
+            line-height: 25px;
+            font-size: 0.9em;
+            transition: width 0.3s ease;
+        }
+        
+        .personality-controls {
+            margin-top: 20px;
+            border-top: 1px solid #dee2e6;
+            padding-top: 15px;
+        }
+        
+        .personality-control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .personality-control-header h4 {
+            margin: 0;
+        }
+        
+        .small-button {
+            font-size: 0.8em;
+            padding: 3px 8px;
+        }
+        
+        .trait-sliders {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .trait-slider {
+            display: flex;
+            align-items: center;
+        }
+        
+        .trait-slider label {
+            width: 150px;
+        }
+        
+        .trait-slider input[type="range"] {
+            flex: 1;
+            margin: 0 10px;
+        }
+        
+        .slider-value {
+            width: 40px;
+            text-align: right;
+        }
+        
+        #applyPersonalityBtn {
+            align-self: flex-end;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <div class="hamburger" id="menu-toggle">☰</div>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>ROS Emotion</h2>
+            <span id="sidebar-close" style="cursor: pointer">✕</span>
+        </div>
+        <div class="sidebar-nav">
+            <a href="index.html">Topic Viewer</a>
+            <a href="emotion_visualization.html">Emotion Visualization</a>
+        </div>
+    </div>
+
+    <div class="main-container" id="main-content">
+        <div class="container">
+            <h1>Emotion Visualization</h1>
+            
+            <div id="status" class="status disconnected">
+                Disconnected from ROS
+            </div>
+
+            <!-- Moved sensory input to the top, above emotional state -->
+            <div class="sensory-input-container">
+                <h3>Sensory Input</h3>
+                <div class="sensory-input-form">
+                    <textarea id="sensoryInputText" placeholder="Enter a sensory observation (e.g., 'I see a friendly dog wagging its tail')"></textarea>
+                    <button id="sendSensoryInput">Send Observation</button>
+                </div>
+            </div>
+
+            <div class="emotion-state">
+                <h3>Current Emotional State</h3>
+                <div class="pad-model">
+                    <div class="pad-value">
+                        <div class="pad-label">Pleasure</div>
+                        <div class="pad-meter">
+                            <div id="pleasure-fill" class="pad-fill" style="width: 50%; left: 50%; background-color: #20c997;"></div>
+                        </div>
+                        <div id="pleasure-value">0.0</div>
+                    </div>
+                    <div class="pad-value">
+                        <div class="pad-label">Arousal</div>
+                        <div class="pad-meter">
+                            <div id="arousal-fill" class="pad-fill" style="width: 50%; left: 50%; background-color: #fd7e14;"></div>
+                        </div>
+                        <div id="arousal-value">0.0</div>
+                    </div>
+                    <div class="pad-value">
+                        <div class="pad-label">Dominance</div>
+                        <div class="pad-meter">
+                            <div id="dominance-fill" class="pad-fill" style="width: 50%; left: 50%; background-color: #6f42c1;"></div>
+                        </div>
+                        <div id="dominance-value">0.0</div>
+                    </div>
+                </div>
+                
+                <div class="visualization-container">
+                    <div class="chart-container">
+                        <div class="chart-title">Basic Emotions</div>
+                        <canvas id="emotionsChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">Emotional State Over Time</div>
+                        <canvas id="historyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Moved description outside the emotional state container -->
+            <div class="emotional-description-container collapsed" id="emotional-description">
+                <h3 id="description-toggle">Description</h3>
+                <div class="emotional-description-content">
+                    <p id="emotion-description-text">No emotional state received yet.</p>
+                </div>
+            </div>
+            
+            <!-- Add Personality Model Section -->
+            <div class="personality-container">
+                <h3>Personality Model</h3>
+                <div class="personality-traits">
+                    <div class="trait-radar-container">
+                        <canvas id="personalityRadarChart"></canvas>
+                    </div>
+                    <div class="trait-meters">
+                        <div class="trait-meter">
+                            <div class="trait-label">Openness</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="openness-bar" style="width: 70%;">0.70</div>
+                            </div>
+                        </div>
+                        <div class="trait-meter">
+                            <div class="trait-label">Conscientiousness</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="conscientiousness-bar" style="width: 60%;">0.60</div>
+                            </div>
+                        </div>
+                        <div class="trait-meter">
+                            <div class="trait-label">Extraversion</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="extraversion-bar" style="width: 70%;">0.70</div>
+                            </div>
+                        </div>
+                        <div class="trait-meter">
+                            <div class="trait-label">Agreeableness</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="agreeableness-bar" style="width: 80%;">0.80</div>
+                            </div>
+                        </div>
+                        <div class="trait-meter">
+                            <div class="trait-label">Neuroticism</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="neuroticism-bar" style="width: 30%;">0.30</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="secondary-traits">
+                        <div class="trait-meter">
+                            <div class="trait-label">Risk Tolerance</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="risk-bar" style="width: 50%;">0.50</div>
+                            </div>
+                        </div>
+                        <div class="trait-meter">
+                            <div class="trait-label">Adaptability</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="adaptability-bar" style="width: 70%;">0.70</div>
+                            </div>
+                        </div>
+                        <div class="trait-meter">
+                            <div class="trait-label">Creativity</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="creativity-bar" style="width: 80%;">0.80</div>
+                            </div>
+                        </div>
+                        <div class="trait-meter">
+                            <div class="trait-label">Resilience</div>
+                            <div class="trait-bar-container">
+                                <div class="trait-bar" id="resilience-bar" style="width: 70%;">0.70</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="personality-controls">
+                    <div class="personality-control-header">
+                        <h4>Modify Traits</h4>
+                        <button id="resetPersonalityBtn" class="small-button">Reset to Default</button>
+                    </div>
+                    <div class="trait-sliders">
+                        <div class="trait-slider">
+                            <label for="openness-slider">Openness:</label>
+                            <input type="range" id="openness-slider" min="0" max="1" step="0.05" value="0.7">
+                            <span class="slider-value" id="openness-value">0.70</span>
+                        </div>
+                        <div class="trait-slider">
+                            <label for="conscientiousness-slider">Conscientiousness:</label>
+                            <input type="range" id="conscientiousness-slider" min="0" max="1" step="0.05" value="0.6">
+                            <span class="slider-value" id="conscientiousness-value">0.60</span>
+                        </div>
+                        <div class="trait-slider">
+                            <label for="extraversion-slider">Extraversion:</label>
+                            <input type="range" id="extraversion-slider" min="0" max="1" step="0.05" value="0.7">
+                            <span class="slider-value" id="extraversion-value">0.70</span>
+                        </div>
+                        <div class="trait-slider">
+                            <label for="agreeableness-slider">Agreeableness:</label>
+                            <input type="range" id="agreeableness-slider" min="0" max="1" step="0.05" value="0.8">
+                            <span class="slider-value" id="agreeableness-value">0.80</span>
+                        </div>
+                        <div class="trait-slider">
+                            <label for="neuroticism-slider">Neuroticism:</label>
+                            <input type="range" id="neuroticism-slider" min="0" max="1" step="0.05" value="0.3">
+                            <span class="slider-value" id="neuroticism-value">0.30</span>
+                        </div>
+                        <button id="applyPersonalityBtn">Apply Changes</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="connection-options">
+                <h3>Connection Options</h3>
+                <div>
+                    <label for="wsUrlInput">WebSocket URL:</label>
+                    <input type="text" id="wsUrlInput" value="ws://localhost:9090" style="width: 250px;">
+                    <button id="connectButton">Connect</button>
+                </div>
+                
+                <div style="margin-top: 15px; display: flex; align-items: center;">
+                    <label for="testPublisherToggle" style="margin-right: 10px;">Test Input Publisher:</label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="testPublisherToggle" class="toggle-switch-checkbox">
+                        <label for="testPublisherToggle" class="toggle-switch-label"></label>
+                    </div>
+                    <span id="testPublisherStatus" style="margin-left: 10px; font-size: 0.9em; color: #6c757d;">Checking status...</span>
+                </div>
+            </div>
+            
+            <div class="rumination-container">
+                <h3>Active Ruminations</h3>
+                <div id="ruminations-list">
+                    No active ruminations.
+                </div>
+            </div>
+            
+            <div class="message-log">
+                <h3>Activity Log</h3>
+                <div id="messageLog"></div>
+            </div>
+            
+            <div class="message-history-container">
+                <h3>Message History</h3>
+                <div class="message-history-toolbar">
+                    <div class="message-history-search">
+                        <input type="text" id="historySearchInput" placeholder="Search messages...">
+                    </div>
+                    <div class="message-history-filter">
+                        <select id="historyTopicFilter">
+                            <option value="all">All Topics</option>
+                            <option value="sensory_input">Sensory Input</option>
+                            <option value="emotional_state">Emotional State</option>
+                            <option value="rumination_update">Rumination</option>
+                            <option value="emotional_response">Emotional Response</option>
+                        </select>
+                    </div>
+                    <button id="exportHistory" class="export-button">Export</button>
+                    <button id="clearHistory" class="clear-button">Clear</button>
+                </div>
+                <div class="message-history-nav">
+                    <button class="history-tab active" data-tab="all">All Messages</button>
+                    <button class="history-tab" data-tab="sensory_input">Sensory Input</button>
+                    <button class="history-tab" data-tab="emotional_state">Emotional State</button>
+                    <button class="history-tab" data-tab="rumination_update">Ruminations</button>
+                    <button class="history-tab" data-tab="emotional_response">Emotional Responses</button>
+                    <button class="history-tab" data-tab="completed_ruminations">Completed Ruminations</button>
+                </div>
+                <div class="message-history-list" id="messageHistoryList"></div>
+                <div class="message-history-pagination" id="historyPagination"></div>
+                <div class="message-history-counter" id="historyCounter">Showing 0 of 0 messages</div>
+            </div>
+            
+            <div class="debug-info">
+                <h3>Debug Information</h3>
+                <div id="debugInfo"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize ROS connection
+        let ros;
+        let emotionalStateSubscription;
+        let ruminationSubscription;
+        let sensoryInputPublisher;
+        let emotionalResponseSubscription;
+        
+        // Chart objects
+        let emotionsChart;
+        let historyChart;
+        
+        // History data
+        const historyDataPoints = 60;
+        const historyData = {
+            pleasure: Array(historyDataPoints).fill(0),
+            arousal: Array(historyDataPoints).fill(0),
+            dominance: Array(historyDataPoints).fill(0)
+        };
+        
+        // Active ruminations
+        const activeRuminations = {};
+        
+        // Completed ruminations
+        const completedRuminations = [];
+        
+        // Message history storage - store up to 10000 messages per topic
+        const MAX_HISTORY_SIZE = 10000;
+        const messageHistory = {
+            all: [],
+            sensory_input: [],
+            emotional_state: [], 
+            rumination_update: [],
+            emotional_response: [],
+            completed_ruminations: []
+        };
+        
+        // Current view settings for message history
+        const historyView = {
+            currentTab: 'all',
+            currentPage: 1,
+            messagesPerPage: 50,
+            searchTerm: '',
+            filteredMessages: []
+        };
+        
+        // Test publisher node control
+        let testPublisherRunning = false;
+        let testPublisherNodeName = '/test_input_publisher';  // The node name to check for
+        let checkingTestPublisher = false;
+        
+        // Sidebar toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuToggle = document.getElementById('menu-toggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarClose = document.getElementById('sidebar-close');
+            const mainContent = document.getElementById('main-content');
+            
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('open');
+            });
+            
+            sidebarClose.addEventListener('click', function() {
+                sidebar.classList.remove('open');
+            });
+            
+            // Close sidebar when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!sidebar.contains(event.target) && 
+                    !menuToggle.contains(event.target) && 
+                    sidebar.classList.contains('open')) {
+                    sidebar.classList.remove('open');
+                }
+            });
+            
+            // Add event listener for Enter key on sensory input textarea
+            const sensoryInputText = document.getElementById('sensoryInputText');
+            sensoryInputText.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); // Prevent newline in textarea
+                    sendSensoryInput();
+                }
+            });
+            
+            // Add event listener for toggling the description section
+            const descriptionToggle = document.getElementById('description-toggle');
+            const descriptionContainer = document.getElementById('emotional-description');
+            
+            descriptionToggle.addEventListener('click', function() {
+                descriptionContainer.classList.toggle('collapsed');
+            });
+        });
+        
+        function addDebugMessage(message) {
+            const debugInfo = document.getElementById('debugInfo');
+            const timestamp = new Date().toISOString();
+            const msgElement = document.createElement('div');
+            msgElement.textContent = `[${timestamp}] ${message}`;
+            debugInfo.appendChild(msgElement);
+            // Keep only the latest 10 messages
+            if (debugInfo.childNodes.length > 10) {
+                debugInfo.removeChild(debugInfo.firstChild);
+            }
+        }
+        
+        function addMessageToLog(message, type) {
+            const messageLog = document.getElementById('messageLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const msgElement = document.createElement('div');
+            msgElement.className = `message-item ${type}`;
+            msgElement.innerHTML = `<strong>[${timestamp}]</strong>: ${message}`;
+            messageLog.appendChild(msgElement);
+            
+            // Auto-scroll to bottom
+            messageLog.scrollTop = messageLog.scrollHeight;
+            
+            // Keep only the latest 20 messages in the visible log
+            if (messageLog.childNodes.length > 20) {
+                messageLog.removeChild(messageLog.firstChild);
+            }
+            
+            // Add to full message history
+            const historyItem = {
+                timestamp: new Date(),
+                message: message,
+                type: type,
+                formattedTime: timestamp
+            };
+            
+            // Add to the appropriate history arrays
+            messageHistory.all.unshift(historyItem);
+            if (messageHistory.all.length > MAX_HISTORY_SIZE) {
+                messageHistory.all.pop();
+            }
+            
+            // Add to type-specific history
+            if (messageHistory[type]) {
+                messageHistory[type].unshift(historyItem);
+                if (messageHistory[type].length > MAX_HISTORY_SIZE) {
+                    messageHistory[type].pop();
+                }
+            }
+            
+            // Update the history view if it's currently open
+            updateMessageHistoryView();
+            
+            // Save to localStorage
+            saveMessageHistory();
+        }
+        
+        function storeMessageInHistory(topic, message) {
+            const timestamp = new Date();
+            const historyItem = {
+                timestamp: timestamp,
+                formattedTime: timestamp.toLocaleTimeString(),
+                topic: topic,
+                message: message
+            };
+            
+            // Add to the all history array
+            messageHistory.all.unshift(historyItem);
+            if (messageHistory.all.length > MAX_HISTORY_SIZE) {
+                messageHistory.all.pop();
+            }
+            
+            // Add to topic-specific history - create it if it doesn't exist
+            if (!messageHistory[topic]) {
+                messageHistory[topic] = [];
+            }
+            
+            messageHistory[topic].unshift(historyItem);
+            if (messageHistory[topic].length > MAX_HISTORY_SIZE) {
+                messageHistory[topic].pop();
+            }
+            
+            // Update the history view if it's currently open
+            updateMessageHistoryView();
+            
+            // Save to localStorage every 100 messages (to reduce performance impact)
+            // And only store a subset of topics to avoid exceeding quota
+            if (messageHistory.all.length % 100 === 0) {
+                saveMessageHistory();
+            }
+        }
+        
+        function saveMessageHistory() {
+            try {
+                // Only save essential topics to localStorage to avoid quota errors
+                const essentialTopics = ['sensory_input', 'emotional_state', 'rumination_update', 'emotional_response', 'completed_ruminations'];
+                const storageData = {
+                    all: messageHistory.all.slice(0, 500) // Only store last 500 of all messages
+                };
+                
+                // Filter out any emotion_visualization messages from 'all' array
+                if (storageData.all && Array.isArray(storageData.all)) {
+                    storageData.all = storageData.all.filter(item => {
+                        return item.topic !== 'emotion_visualization' && 
+                              item.topic !== '/emotion_visualization';
+                    });
+                }
+                
+                // Add the essential topics
+                essentialTopics.forEach(topicKey => {
+                    if (messageHistory[topicKey]) {
+                        storageData[topicKey] = messageHistory[topicKey].slice(0, 100); // Only 100 messages per topic
+                    }
+                });
+                
+                // Try to save, but don't break if it fails
+                localStorage.setItem('rosEmotionMessageHistory', JSON.stringify(storageData));
+                addDebugMessage('Saved message history subset to localStorage');
+                return true;
+            } catch (e) {
+                console.error('Failed to save message history to localStorage:', e);
+                addDebugMessage('Note: Not saving to localStorage due to quota limits');
+                
+                // If we got a quota error, clear some existing data to make room
+                try {
+                    // Try to clear less important data
+                    localStorage.removeItem('rosEmotionMessageHistory');
+                    addDebugMessage('Cleared existing history from localStorage to make room');
+                } catch (clearError) {
+                    console.error('Failed to clear localStorage:', clearError);
+                }
+                return false;
+            }
+        }
+        
+        function loadMessageHistory() {
+            try {
+                const stored = localStorage.getItem('rosEmotionMessageHistory');
+                if (stored) {
+                    const loaded = JSON.parse(stored);
+                    
+                    // Remove emotion_visualization topic if it exists in stored data
+                    if (loaded.emotion_visualization) {
+                        delete loaded.emotion_visualization;
+                    }
+                    
+                    // If the 'all' array exists, filter out emotion_visualization messages
+                    if (loaded.all && Array.isArray(loaded.all)) {
+                        loaded.all = loaded.all.filter(item => {
+                            return item.topic !== 'emotion_visualization' && 
+                                  item.topic !== '/emotion_visualization';
+                        });
+                    }
+                    
+                    for (const topic in loaded) {
+                        if (messageHistory[topic]) {
+                            messageHistory[topic] = loaded[topic];
+                        }
+                    }
+                    addDebugMessage('Loaded message history from localStorage');
+                    updateMessageHistoryView();
+                }
+            } catch (e) {
+                console.error('Failed to load message history:', e);
+                addDebugMessage('Failed to load message history: ' + e.message);
+            }
+        }
+        
+        function updateMessageHistoryView() {
+            const historyList = document.getElementById('messageHistoryList');
+            const pagination = document.getElementById('historyPagination');
+            const counter = document.getElementById('historyCounter');
+            const searchTerm = document.getElementById('historySearchInput').value.toLowerCase();
+            
+            // Filter messages based on current tab and search term
+            historyView.filteredMessages = messageHistory[historyView.currentTab].filter(item => {
+                if (!searchTerm) return true;
+                
+                // Search in the message content
+                if (typeof item.message === 'string' && item.message.toLowerCase().includes(searchTerm)) {
+                    return true;
+                }
+                
+                // For object messages, stringify them for searching
+                if (typeof item.message === 'object') {
+                    const stringified = JSON.stringify(item.message);
+                    return stringified.toLowerCase().includes(searchTerm);
+                }
+                
+                return false;
+            });
+            
+            // Calculate pagination
+            const totalMessages = historyView.filteredMessages.length;
+            const totalPages = Math.ceil(totalMessages / historyView.messagesPerPage);
+            
+            // Adjust current page if out of bounds
+            if (historyView.currentPage > totalPages) {
+                historyView.currentPage = Math.max(1, totalPages);
+            }
+            
+            // Get current page of messages
+            const startIdx = (historyView.currentPage - 1) * historyView.messagesPerPage;
+            const endIdx = Math.min(startIdx + historyView.messagesPerPage, totalMessages);
+            const displayedMessages = historyView.filteredMessages.slice(startIdx, endIdx);
+            
+            // Update counter
+            counter.textContent = `Showing ${startIdx + 1}-${endIdx} of ${totalMessages} messages`;
+            
+            // Clear list
+            historyList.innerHTML = '';
+            
+            // Display messages
+            let lastTopic = null;
+            
+            displayedMessages.forEach(item => {
+                // Add topic header if topic changes or if viewing "all" tab
+                if (historyView.currentTab === 'all' && item.topic !== lastTopic) {
+                    const topicHeader = document.createElement('div');
+                    topicHeader.className = 'history-topic';
+                    topicHeader.textContent = formatTopicName(item.topic || 'unknown');
+                    historyList.appendChild(topicHeader);
+                    lastTopic = item.topic;
+                }
+                
+                const msgElement = document.createElement('div');
+                msgElement.className = `message-item ${item.type || ''}`;
+                
+                let messageContent;
+                if (typeof item.message === 'string') {
+                    messageContent = item.message;
+                } else {
+                    // For object messages, display in a readable format
+                    messageContent = formatMessage(item.topic, item.message);
+                }
+                
+                msgElement.innerHTML = `<strong>[${item.formattedTime}]</strong>: ${messageContent}`;
+                historyList.appendChild(msgElement);
+            });
+            
+            // If no messages
+            if (displayedMessages.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.className = 'message-item';
+                emptyMsg.textContent = 'No messages found.';
+                historyList.appendChild(emptyMsg);
+            }
+            
+            // Update pagination
+            updatePagination(pagination, totalPages);
+        }
+        
+        function formatTopicName(topic) {
+            // Convert camelCase or snake_case to Title Case with Spaces
+            return topic
+                .replace(/_/g, ' ')
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase())
+                .trim();
+        }
+        
+        function formatMessage(topic, message) {
+            if (!message) return 'Empty message';
+            
+            try {
+                // Handle different message types with specialized formatting
+                switch(topic) {
+                    case 'emotional_state':
+                        // Check if values are already strings or if they're numbers
+                        const pleasureVal = typeof message.pleasure === 'number' ? 
+                            message.pleasure.toFixed(2) : 
+                            (message.pleasure || 'N/A');
+                        
+                        const arousalVal = typeof message.arousal === 'number' ? 
+                            message.arousal.toFixed(2) : 
+                            (message.arousal || 'N/A');
+                        
+                        const dominanceVal = typeof message.dominance === 'number' ? 
+                            message.dominance.toFixed(2) : 
+                            (message.dominance || 'N/A');
+                        
+                        return `P: ${pleasureVal}, A: ${arousalVal}, D: ${dominanceVal} - ${message.description || ''}`;
+                    
+                    case 'rumination_update':
+                        // Also fix intensity formatting to handle string or number
+                        const intensityVal = typeof message.intensity === 'number' ? 
+                            message.intensity.toFixed(2) : 
+                            (message.intensity || 'N/A');
+                        
+                        return `${message.is_final ? 'FINAL' : message.rumination_stage} - 
+                                Intensity: ${intensityVal} - 
+                                ${message.description || ''}`;
+                    
+                    case 'sensory_input':
+                        return `${message.input_type || ''}: ${message.description || ''}`;
+                    
+                    case 'emotional_response':
+                        return `${message.is_rumination ? 'Rumination' : 'Response'}: ${message.response_text || ''}`;
+                    
+                    default:
+                        // For unknown message types, try to find common fields
+                        if (message.data !== undefined) {
+                            return `Data: ${typeof message.data === 'object' ? JSON.stringify(message.data) : message.data}`;
+                        }
+                        
+                        if (message.msg !== undefined) {
+                            return `Message: ${typeof message.msg === 'object' ? JSON.stringify(message.msg) : message.msg}`;
+                        }
+                        
+                        if (message.text !== undefined) {
+                            return `Text: ${message.text}`;
+                        }
+                        
+                        if (message.description !== undefined) {
+                            return `Description: ${message.description}`;
+                        }
+                        
+                        // Generic object formatting
+                        const str = JSON.stringify(message);
+                        return str.length > 500 ? str.substring(0, 500) + '...' : str;
+                }
+            } catch (e) {
+                console.error('Error formatting message:', e);
+                return `Error formatting message: ${e.message}`;
+            }
+        }
+        
+        function updatePagination(paginationElement, totalPages) {
+            paginationElement.innerHTML = '';
+            
+            // No pagination needed for 0 or 1 page
+            if (totalPages <= 1) return;
+            
+            // Add first page button
+            const firstBtn = document.createElement('button');
+            firstBtn.textContent = '«';
+            firstBtn.addEventListener('click', () => {
+                historyView.currentPage = 1;
+                updateMessageHistoryView();
+            });
+            paginationElement.appendChild(firstBtn);
+            
+            // Add previous button
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '‹';
+            prevBtn.addEventListener('click', () => {
+                if (historyView.currentPage > 1) {
+                    historyView.currentPage--;
+                    updateMessageHistoryView();
+                }
+            });
+            paginationElement.appendChild(prevBtn);
+            
+            // Calculate which page buttons to show
+            let startPage = Math.max(1, historyView.currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            
+            // Adjust start if we're near the end
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+            
+            // Add page buttons
+            for (let i = startPage; i <= endPage; i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.textContent = i;
+                if (i === historyView.currentPage) {
+                    pageBtn.className = 'active';
+                }
+                pageBtn.addEventListener('click', () => {
+                    historyView.currentPage = i;
+                    updateMessageHistoryView();
+                });
+                paginationElement.appendChild(pageBtn);
+            }
+            
+            // Add next button
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = '›';
+            nextBtn.addEventListener('click', () => {
+                if (historyView.currentPage < totalPages) {
+                    historyView.currentPage++;
+                    updateMessageHistoryView();
+                }
+            });
+            paginationElement.appendChild(nextBtn);
+            
+            // Add last page button
+            const lastBtn = document.createElement('button');
+            lastBtn.textContent = '»';
+            lastBtn.addEventListener('click', () => {
+                historyView.currentPage = totalPages;
+                updateMessageHistoryView();
+            });
+            paginationElement.appendChild(lastBtn);
+        }
+        
+        function exportMessageHistory() {
+            try {
+                // Create a full export of all message history
+                const exportData = {
+                    exportDate: new Date().toISOString(),
+                    messageHistory: messageHistory
+                };
+                
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `ros_emotion_history_${new Date().toISOString().split('T')[0]}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                document.body.removeChild(downloadAnchor);
+                
+                addDebugMessage('Message history exported successfully');
+            } catch (e) {
+                console.error('Failed to export message history:', e);
+                addDebugMessage('Failed to export message history: ' + e.message);
+                
+                // If the JSON export is too large, offer the raw text version instead
+                if (e.toString().includes('Maximum call stack size exceeded') || 
+                    e.toString().includes('overflow') ||
+                    e.toString().includes('quota')) {
+                    addDebugMessage('History too large for JSON export, try using "Save Raw Data" instead');
+                    alert('The message history is too large for a JSON export. Please use the "Save Raw Data" button instead.');
+                }
+            }
+        }
+        
+        function clearMessageHistory() {
+            if (confirm('Are you sure you want to clear all message history? This cannot be undone.')) {
+                for (const topic in messageHistory) {
+                    messageHistory[topic] = [];
+                }
+                
+                // Update view
+                updateMessageHistoryView();
+                
+                // Clear localStorage
+                localStorage.removeItem('rosEmotionMessageHistory');
+                
+                addDebugMessage('Message history cleared');
+            }
+        }
+        
+        function resetConnection() {
+            addDebugMessage('Resetting connection...');
+            
+            // Close existing connection
+            if (ros) {
+                ros.close();
+            }
+            
+            // Clear any existing subscriptions
+            if (emotionalStateSubscription) {
+                emotionalStateSubscription.unsubscribe();
+                emotionalStateSubscription = null;
+            }
+            
+            if (ruminationSubscription) {
+                ruminationSubscription.unsubscribe();
+                ruminationSubscription = null;
+            }
+            
+            if (emotionalResponseSubscription) {
+                emotionalResponseSubscription.unsubscribe();
+                emotionalResponseSubscription = null;
+            }
+            
+            // Update status
+            document.getElementById('status').className = 'status disconnected';
+            document.getElementById('status').innerHTML = 'Disconnected from ROS';
+            
+            // Reconnect after a short delay
+            setTimeout(function() {
+                const wsUrl = document.getElementById('wsUrlInput').value;
+                initRosConnection(wsUrl);
+            }, 1000);
+            
+            addDebugMessage('Connection reset initiated');
+        }
+        
+        function initRosConnection(wsUrl) {
+            // Clear existing connection
+            if (ros) {
+                ros.close();
+                
+                if (emotionalStateSubscription) {
+                    emotionalStateSubscription.unsubscribe();
+                    emotionalStateSubscription = null;
+                }
+                
+                if (ruminationSubscription) {
+                    ruminationSubscription.unsubscribe();
+                    ruminationSubscription = null;
+                }
+                
+                if (emotionalResponseSubscription) {
+                    emotionalResponseSubscription.unsubscribe();
+                    emotionalResponseSubscription = null;
+                }
+            }
+            
+            addDebugMessage(`Attempting to connect to ROS WebSocket at: ${wsUrl}`);
+            
+            ros = new ROSLIB.Ros({
+                url: wsUrl
+            });
+
+            ros.on('connection', function() {
+                addDebugMessage('Connected to websocket server.');
+                document.getElementById('status').className = 'status connected';
+                document.getElementById('status').innerHTML = 'Connected to ROS';
+                
+                // Log the URL for debugging
+                addDebugMessage(`Connected to WebSocket URL: ${wsUrl}`);
+                
+                // Setup publishers
+                setupPublishers();
+                
+                // Subscribe to emotional state
+                subscribeToEmotionalState();
+                
+                // Subscribe to rumination updates
+                subscribeToRuminations();
+                
+                // Subscribe to emotional responses
+                subscribeToEmotionalResponses();
+                
+                // Subscribe to ALL topics for complete message monitoring
+                subscribeToAllTopics();
+                
+                // Test that we can access the ROS graph
+                try {
+                    ros.getTopics(function(topics) {
+                        addDebugMessage(`Available topics: ${topics.topics.join(', ')}`);
+                    });
+                } catch (e) {
+                    addDebugMessage(`Error getting topics: ${e}`);
+                }
+            });
+
+            ros.on('error', function(error) {
+                addDebugMessage(`Error connecting to websocket server: ${error}`);
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').innerHTML = 'Error connecting to ROS';
+                
+                // More detailed error message
+                addDebugMessage(`Connection error details: ${JSON.stringify(error)}`);
+            });
+
+            ros.on('close', function() {
+                addDebugMessage('Connection to websocket server closed.');
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').innerHTML = 'Disconnected from ROS';
+            });
+        }
+        
+        function setupPublishers() {
+            sensoryInputPublisher = new ROSLIB.Topic({
+                ros: ros,
+                name: '/sensory_input',
+                messageType: 'ros_emotion/SensoryInput'
+            });
+            
+            addDebugMessage('Sensory input publisher created');
+        }
+        
+        function sendSensoryInput() {
+            if (!ros || !sensoryInputPublisher) {
+                addMessageToLog('Cannot send input: Not connected to ROS', 'error');
+                return;
+            }
+            
+            const inputText = document.getElementById('sensoryInputText').value.trim();
+            if (!inputText) {
+                addMessageToLog('Cannot send empty sensory input', 'error');
+                return;
+            }
+            
+            const message = new ROSLIB.Message({
+                timestamp: {
+                    sec: Math.floor(Date.now() / 1000),
+                    nanosec: (Date.now() % 1000) * 1000000
+                },
+                input_type: 'text',
+                description: inputText,
+                raw_data: '',
+                source: 'web_interface',
+                intensity: 0.8,
+                priority: 0.7,
+                confidence: 0.9,
+                metadata: '{}'
+            });
+            
+            // Store in message history before sending
+            storeMessageInHistory('sensory_input', {
+                input_type: 'text',
+                description: inputText,
+                source: 'web_interface',
+                intensity: 0.8
+            });
+            
+            sensoryInputPublisher.publish(message);
+            addMessageToLog(`Sensory input sent: "${inputText}"`, 'sensory-input');
+            addDebugMessage(`Published sensory input: ${inputText}`);
+            
+            // Clear the input field
+            document.getElementById('sensoryInputText').value = '';
+        }
+        
+        function subscribeToEmotionalState() {
+            addDebugMessage('Subscribing to emotional_state topic');
+            
+            emotionalStateSubscription = new ROSLIB.Topic({
+                ros: ros,
+                name: '/emotional_state',
+                messageType: 'ros_emotion/EmotionalState'
+            });
+            
+            emotionalStateSubscription.subscribe(function(message) {
+                addDebugMessage('Received emotional state update');
+                
+                // Don't store full emotional state in message history - too much data
+                // Instead, store a simplified version with just the key metrics
+                const simplifiedState = {
+                    timestamp: new Date(),
+                    pleasure: message.pleasure.toFixed(2),
+                    arousal: message.arousal.toFixed(2),
+                    dominance: message.dominance.toFixed(2),
+                    description: message.description || 'No description'
+                };
+                
+                // Only store simplified version in message history occasionally (once every 5 seconds)
+                const now = Date.now();
+                if (!window.lastEmotionalStateStored || now - window.lastEmotionalStateStored > 5000) {
+                    storeMessageInHistory('emotional_state', simplifiedState);
+                    window.lastEmotionalStateStored = now;
+                    
+                    // Add to message log
+                    addMessageToLog(`Emotional state updated - P:${message.pleasure.toFixed(2)}, A:${message.arousal.toFixed(2)}, D:${message.dominance.toFixed(2)}`, 'state-change');
+                }
+                
+                // Always update the display
+                updateEmotionalStateDisplay(message);
+            });
+        }
+        
+        function subscribeToEmotionalResponses() {
+            addDebugMessage('Subscribing to emotional_response topic');
+            
+            emotionalResponseSubscription = new ROSLIB.Topic({
+                ros: ros,
+                name: '/emotional_response',
+                messageType: 'ros_emotion/EmotionalResponse'
+            });
+            
+            emotionalResponseSubscription.subscribe(function(message) {
+                addDebugMessage('Received emotional response');
+                
+                // Store in message history
+                storeMessageInHistory('emotional_response', message);
+                
+                // Add to message log
+                if (message.is_rumination) {
+                    addMessageToLog(`Rumination: ${message.response_text}`, 'rumination');
+                } else {
+                    addMessageToLog(`State change: ${message.response_text}`, 'state-change');
+                }
+            });
+        }
+        
+        function subscribeToRuminations() {
+            addDebugMessage('Subscribing to rumination_update topic');
+            
+            ruminationSubscription = new ROSLIB.Topic({
+                ros: ros,
+                name: '/rumination_update',
+                messageType: 'ros_emotion/RuminationUpdate'
+            });
+            
+            ruminationSubscription.subscribe(function(message) {
+                addDebugMessage('Received rumination update');
+                
+                // Store in message history
+                storeMessageInHistory('rumination_update', message);
+                
+                updateRuminationDisplay(message);
+            });
+        }
+        
+        function subscribeToAllTopics() {
+            addDebugMessage('Setting up subscriptions to all topics for message history tracking');
+            
+            // First get the list of all available topics
+            ros.getTopics(function(result) {
+                const topics = result.topics;
+                const types = result.types;
+                
+                addDebugMessage(`Found ${topics.length} topics to monitor`);
+                
+                // Create a mapping of existing topic categories
+                const topicCategories = {
+                    '/emotional_state': 'emotional_state',
+                    '/rumination_update': 'rumination_update',
+                    '/emotional_response': 'emotional_response',
+                    '/sensory_input': 'sensory_input'
+                };
+                
+                // List of topics to exclude from history to save space
+                const excludedTopics = [
+                    // Skip high-frequency topics that generate a lot of data
+                    '/rosout',
+                    '/parameter_events', 
+                    '/clock',
+                    '/emotion_visualization', // Added this topic to exclude it
+                    // Add other topics that you don't need to log
+                ];
+                
+                // For each topic, subscribe and log messages
+                topics.forEach((topic, index) => {
+                    // Skip topics we already have specialized handling for
+                    if (topicCategories[topic]) {
+                        addDebugMessage(`Skipping specialized topic: ${topic}`);
+                        return;
+                    }
+                    
+                    // Skip excluded topics
+                    if (excludedTopics.includes(topic)) {
+                        addDebugMessage(`Skipping excluded topic: ${topic}`);
+                        return;
+                    }
+                    
+                    // Create a new section in message history for this topic if not exists
+                    const topicKey = topic.replace(/\//g, '_').substring(1); // Remove leading slash
+                    
+                    // Skip the emotion_visualization topic completely
+                    if (topicKey === 'emotion_visualization') {
+                        addDebugMessage(`Skipping emotion_visualization topic`);
+                        return;
+                    }
+                    
+                    if (!messageHistory[topicKey]) {
+                        messageHistory[topicKey] = [];
+                        
+                        // Also add a button in the UI for this topic
+                        const historyNav = document.querySelector('.message-history-nav');
+                        const topicButton = document.createElement('button');
+                        topicButton.className = 'history-tab';
+                        topicButton.dataset.tab = topicKey;
+                        topicButton.textContent = formatTopicName(topicKey);
+                        topicButton.addEventListener('click', function() {
+                            document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+                            this.classList.add('active');
+                            historyView.currentTab = topicKey;
+                            historyView.currentPage = 1;
+                            updateMessageHistoryView();
+                        });
+                        historyNav.appendChild(topicButton);
+                        
+                        // Add option to the filter dropdown
+                        const topicFilter = document.getElementById('historyTopicFilter');
+                        const option = document.createElement('option');
+                        option.value = topicKey;
+                        option.textContent = formatTopicName(topicKey);
+                        topicFilter.appendChild(option);
+                    }
+                    
+                    try {
+                        // Subscribe to the topic
+                        const subscription = new ROSLIB.Topic({
+                            ros: ros,
+                            name: topic,
+                            messageType: types[index]
+                        });
+                        
+                        // Add throttling for high-frequency topics
+                        let lastMessageTime = 0;
+                        
+                        subscription.subscribe(function(message) {
+                            const now = Date.now();
+                            // Only store a message from this topic every 2 seconds at most
+                            if (now - lastMessageTime > 2000) {
+                                // Store in message history
+                                storeMessageInHistory(topicKey, message);
+                                lastMessageTime = now;
+                                
+                                // Add debug message for the first few messages from each topic
+                                if (messageHistory[topicKey].length <= 5) {
+                                    addDebugMessage(`Received message on topic: ${topic}`);
+                                }
+                            }
+                        });
+                        
+                        addDebugMessage(`Subscribed to topic: ${topic} (${types[index]})`);
+                    } catch (e) {
+                        addDebugMessage(`Error subscribing to topic ${topic}: ${e.message}`);
+                    }
+                });
+            });
+        }
+        
+        function updateEmotionalStateDisplay(state) {
+            try {
+                // Ensure we have a valid state object
+                if (!state) {
+                    addDebugMessage('Warning: Received undefined or null emotional state');
+                    return;
+                }
+                
+                // Convert values to numbers if needed
+                const pleasure = typeof state.pleasure === 'string' ? parseFloat(state.pleasure) : (state.pleasure || 0);
+                const arousal = typeof state.arousal === 'string' ? parseFloat(state.arousal) : (state.arousal || 0);
+                const dominance = typeof state.dominance === 'string' ? parseFloat(state.dominance) : (state.dominance || 0);
+                
+                // Add detailed debug messages
+                addDebugMessage(`Updating display with - Pleasure: ${pleasure}, Arousal: ${arousal}, Dominance: ${dominance}`);
+                
+                // Log all other emotion values if available
+                if (state.happiness !== undefined || state.sadness !== undefined) {
+                    addDebugMessage(`Emotions - Happiness: ${state.happiness || 0}, Sadness: ${state.sadness || 0}, Anger: ${state.anger || 0}, Fear: ${state.fear || 0}, Disgust: ${state.disgust || 0}, Surprise: ${state.surprise || 0}`);
+                }
+                
+                // Update PAD model visualization
+                updatePADVisualization(pleasure, arousal, dominance);
+                
+                // Update emotions chart - ensure all properties exist
+                const emotionState = {
+                    happiness: typeof state.happiness === 'string' ? parseFloat(state.happiness) : (state.happiness || 0),
+                    sadness: typeof state.sadness === 'string' ? parseFloat(state.sadness) : (state.sadness || 0),
+                    anger: typeof state.anger === 'string' ? parseFloat(state.anger) : (state.anger || 0),
+                    fear: typeof state.fear === 'string' ? parseFloat(state.fear) : (state.fear || 0),
+                    disgust: typeof state.disgust === 'string' ? parseFloat(state.disgust) : (state.disgust || 0),
+                    surprise: typeof state.surprise === 'string' ? parseFloat(state.surprise) : (state.surprise || 0),
+                    pleasure: pleasure,
+                    arousal: arousal,
+                    dominance: dominance
+                };
+                
+                // Update emotions chart
+                updateEmotionsChart(emotionState);
+                
+                // Update history chart - use our processed values
+                const historyState = {
+                    pleasure: pleasure,
+                    arousal: arousal,
+                    dominance: dominance
+                };
+                updateHistoryChart(historyState);
+                
+                // Update description
+                document.getElementById('emotion-description-text').textContent = 
+                    state.description || 'No description available.';
+            } catch (e) {
+                console.error('Error updating emotional state display:', e);
+                addDebugMessage(`Error updating display: ${e.message}`);
+            }
+        }
+        
+        function updatePADVisualization(pleasure, arousal, dominance) {
+            // Convert values to numbers if they're strings
+            const pleasureNum = typeof pleasure === 'string' ? parseFloat(pleasure) : pleasure;
+            const arousalNum = typeof arousal === 'string' ? parseFloat(arousal) : arousal;
+            const dominanceNum = typeof dominance === 'string' ? parseFloat(dominance) : dominance;
+            
+            // Handle NaN values
+            const validPleasure = !isNaN(pleasureNum) ? pleasureNum : 0;
+            const validArousal = !isNaN(arousalNum) ? arousalNum : 0;
+            const validDominance = !isNaN(dominanceNum) ? dominanceNum : 0;
+            
+            // Display values
+            document.getElementById('pleasure-value').textContent = validPleasure.toFixed(2);
+            document.getElementById('arousal-value').textContent = validArousal.toFixed(2);
+            document.getElementById('dominance-value').textContent = validDominance.toFixed(2);
+            
+            // Update meters
+            // Convert from -1,1 range to 0-100% with center at 50%
+            const pleasurePct = (validPleasure + 1) * 50;
+            const arousalPct = (validArousal + 1) * 50;
+            const dominancePct = (validDominance + 1) * 50;
+            
+            // Pleasure fill (green for positive, red for negative)
+            const pleasureFill = document.getElementById('pleasure-fill');
+            if (validPleasure >= 0) {
+                pleasureFill.style.left = '50%';
+                pleasureFill.style.width = pleasurePct - 50 + '%';
+                pleasureFill.style.backgroundColor = '#20c997'; // Green
+            } else {
+                pleasureFill.style.width = 50 - pleasurePct + '%';
+                pleasureFill.style.left = pleasurePct + '%';
+                pleasureFill.style.backgroundColor = '#dc3545'; // Red
+            }
+            
+            // Arousal fill (orange for high, blue for low)
+            const arousalFill = document.getElementById('arousal-fill');
+            if (validArousal >= 0) {
+                arousalFill.style.left = '50%';
+                arousalFill.style.width = arousalPct - 50 + '%';
+                arousalFill.style.backgroundColor = '#fd7e14'; // Orange
+            } else {
+                arousalFill.style.width = 50 - arousalPct + '%';
+                arousalFill.style.left = arousalPct + '%';
+                arousalFill.style.backgroundColor = '#0dcaf0'; // Blue
+            }
+            
+            // Dominance fill (purple for high, yellow for low)
+            const dominanceFill = document.getElementById('dominance-fill');
+            if (validDominance >= 0) {
+                dominanceFill.style.left = '50%';
+                dominanceFill.style.width = dominancePct - 50 + '%';
+                dominanceFill.style.backgroundColor = '#6f42c1'; // Purple
+            } else {
+                dominanceFill.style.width = 50 - dominancePct + '%';
+                dominanceFill.style.left = dominancePct + '%';
+                dominanceFill.style.backgroundColor = '#ffc107'; // Yellow
+            }
+        }
+        
+        function updateEmotionsChart(state) {
+            if (!emotionsChart) {
+                initEmotionsChart();
+            }
+            
+            // Update data
+            emotionsChart.data.datasets[0].data = [
+                state.happiness,
+                state.sadness,
+                state.anger,
+                state.fear,
+                state.disgust,
+                state.surprise
+            ];
+            
+            emotionsChart.update();
+        }
+        
+        function updateHistoryChart(state) {
+            // Add new data points
+            historyData.pleasure.push(state.pleasure);
+            historyData.arousal.push(state.arousal);
+            historyData.dominance.push(state.dominance);
+            
+            // Remove old data points
+            if (historyData.pleasure.length > historyDataPoints) {
+                historyData.pleasure.shift();
+                historyData.arousal.shift();
+                historyData.dominance.shift();
+            }
+            
+            if (!historyChart) {
+                initHistoryChart();
+            }
+            
+            // Update data
+            historyChart.data.datasets[0].data = [...historyData.pleasure];
+            historyChart.data.datasets[1].data = [...historyData.arousal];
+            historyChart.data.datasets[2].data = [...historyData.dominance];
+            
+            historyChart.update();
+        }
+        
+        function initEmotionsChart() {
+            const ctx = document.getElementById('emotionsChart').getContext('2d');
+            emotionsChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Happiness', 'Sadness', 'Anger', 'Fear', 'Disgust', 'Surprise'],
+                    datasets: [{
+                        label: 'Emotion Intensity',
+                        data: [0, 0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            '#ffc107', // Happiness: Yellow
+                            '#0d6efd', // Sadness: Blue
+                            '#dc3545', // Anger: Red
+                            '#6c757d', // Fear: Gray
+                            '#198754', // Disgust: Green
+                            '#fd7e14'  // Surprise: Orange
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1.0,
+                            title: {
+                                display: true,
+                                text: 'Intensity'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function initHistoryChart() {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            
+            // Generate labels (time points)
+            const labels = Array.from({ length: historyDataPoints }, (_, i) => i + 1);
+            
+            historyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Pleasure',
+                            data: [...historyData.pleasure],
+                            borderColor: '#20c997',
+                            backgroundColor: 'rgba(32, 201, 151, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: false
+                        },
+                        {
+                            label: 'Arousal',
+                            data: [...historyData.arousal],
+                            borderColor: '#fd7e14',
+                            backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: false
+                        },
+                        {
+                            label: 'Dominance',
+                            data: [...historyData.dominance],
+                            borderColor: '#6f42c1',
+                            backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            min: -1.0,
+                            max: 1.0,
+                            title: {
+                                display: true,
+                                text: 'Value'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateRuminationDisplay(rumination) {
+            // Check if this is a final update (to remove from active list)
+            if (rumination.is_final) {
+                if (activeRuminations[rumination.original_input_id]) {
+                    // Store in completed ruminations before removing
+                    const completedRumination = {
+                        ...activeRuminations[rumination.original_input_id],
+                        completedAt: new Date()
+                    };
+                    completedRuminations.unshift(completedRumination);
+                    
+                    // Keep only the latest 10000 completed ruminations
+                    if (completedRuminations.length > MAX_HISTORY_SIZE) {
+                        completedRuminations.pop();
+                    }
+                    
+                    // Also store in message history
+                    messageHistory.completed_ruminations.unshift({
+                        timestamp: new Date(),
+                        formattedTime: new Date().toLocaleTimeString(),
+                        topic: 'completed_ruminations',
+                        message: completedRumination
+                    });
+                    
+                    if (messageHistory.completed_ruminations.length > MAX_HISTORY_SIZE) {
+                        messageHistory.completed_ruminations.pop();
+                    }
+                    
+                    // Remove from active list
+                    delete activeRuminations[rumination.original_input_id];
+                }
+            } else {
+                // Add or update in active ruminations
+                activeRuminations[rumination.original_input_id] = rumination;
+            }
+            
+            // Update display
+            const ruminationsList = document.getElementById('ruminations-list');
+            
+            if (Object.keys(activeRuminations).length === 0) {
+                ruminationsList.textContent = 'No active ruminations.';
+                return;
+            }
+            
+            // Clear current list
+            ruminationsList.innerHTML = '';
+            
+            // Add each active rumination
+            for (const id in activeRuminations) {
+                const rumination = activeRuminations[id];
+                const ruminationItem = document.createElement('div');
+                ruminationItem.className = 'rumination-item';
+                
+                const content = `
+                    <div><strong>Stage:</strong> ${rumination.rumination_stage}</div>
+                    <div><strong>Intensity:</strong> ${rumination.intensity.toFixed(2)}</div>
+                    <div><strong>Description:</strong> ${rumination.description}</div>
+                `;
+                
+                ruminationItem.innerHTML = content;
+                ruminationsList.appendChild(ruminationItem);
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('connectButton').addEventListener('click', function() {
+            const wsUrl = document.getElementById('wsUrlInput').value;
+            initRosConnection(wsUrl);
+        });
+        
+        document.getElementById('sendSensoryInput').addEventListener('click', function() {
+            sendSensoryInput();
+        });
+        
+        // Message History Tab Navigation
+        document.querySelectorAll('.history-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Update active tab
+                document.querySelectorAll('.history-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Update current tab
+                historyView.currentTab = this.dataset.tab;
+                historyView.currentPage = 1; // Reset to first page
+                updateMessageHistoryView();
+            });
+        });
+        
+        // Search input
+        document.getElementById('historySearchInput').addEventListener('input', function() {
+            historyView.searchTerm = this.value.toLowerCase();
+            historyView.currentPage = 1; // Reset to first page
+            updateMessageHistoryView();
+        });
+        
+        // Topic filter
+        document.getElementById('historyTopicFilter').addEventListener('change', function() {
+            historyView.currentTab = this.value;
+            historyView.currentPage = 1; // Reset to first page
+            updateMessageHistoryView();
+            
+            // Update active tab button
+            document.querySelectorAll('.history-tab').forEach(tab => {
+                if (tab.dataset.tab === historyView.currentTab) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+        });
+        
+        // Export button
+        document.getElementById('exportHistory').addEventListener('click', exportMessageHistory);
+        
+        // Clear button
+        document.getElementById('clearHistory').addEventListener('click', clearMessageHistory);
+        
+        // Initialize with default URL
+        const hostname = window.location.hostname;
+        const defaultWsUrl = 'ws://' + hostname + ':9090';
+        document.getElementById('wsUrlInput').value = defaultWsUrl;
+        
+        // Initialize charts
+        initEmotionsChart();
+        initHistoryChart();
+        
+        // Load previous message history from localStorage
+        loadMessageHistory();
+        
+        // Personality visualization functions
+        // Personality radar chart initialization
+        function initPersonalityRadarChart() {
+            const ctx = document.getElementById('personalityRadarChart').getContext('2d');
+            
+            const personalityRadarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Openness', 'Conscientiousness', 'Extraversion', 'Agreeableness', 'Neuroticism'],
+                    datasets: [{
+                        label: 'Personality Traits',
+                        data: [0.7, 0.6, 0.7, 0.8, 0.3],
+                        backgroundColor: 'rgba(111, 66, 193, 0.2)',
+                        borderColor: 'rgba(111, 66, 193, 1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(111, 66, 193, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(111, 66, 193, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        r: {
+                            angleLines: {
+                                display: true,
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                beginAtZero: true,
+                                max: 1,
+                                stepSize: 0.2,
+                                backdropColor: 'transparent'
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 12,
+                                    weight: 'bold'
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            return personalityRadarChart;
+        }
+        
+        // Update personality trait bars
+        function updateTraitBars(traits) {
+            for (const trait in traits) {
+                const value = traits[trait];
+                const traitBar = document.getElementById(`${trait.toLowerCase()}-bar`);
+                
+                if (traitBar) {
+                    traitBar.style.width = `${value * 100}%`;
+                    traitBar.textContent = value.toFixed(2);
+                }
+            }
+        }
+        
+        // Initialize slider events
+        function initPersonalityControls() {
+            const traitSliders = document.querySelectorAll('.trait-slider input[type="range"]');
+            
+            traitSliders.forEach(slider => {
+                const valueDisplay = document.getElementById(`${slider.id.split('-')[0]}-value`);
+                
+                slider.addEventListener('input', function() {
+                    valueDisplay.textContent = parseFloat(this.value).toFixed(2);
+                });
+            });
+            
+            // Apply button event handler
+            document.getElementById('applyPersonalityBtn').addEventListener('click', function() {
+                const traits = {
+                    openness: parseFloat(document.getElementById('openness-slider').value),
+                    conscientiousness: parseFloat(document.getElementById('conscientiousness-slider').value),
+                    extraversion: parseFloat(document.getElementById('extraversion-slider').value),
+                    agreeableness: parseFloat(document.getElementById('agreeableness-slider').value),
+                    neuroticism: parseFloat(document.getElementById('neuroticism-slider').value)
+                };
+                
+                // Update the UI
+                updateTraitBars(traits);
+                
+                // Update radar chart
+                updatePersonalityRadarChart(traits);
+                
+                // Send to ROS
+                sendPersonalityUpdate(traits);
+            });
+            
+            // Reset button
+            document.getElementById('resetPersonalityBtn').addEventListener('click', function() {
+                fetchDefaultPersonality();
+            });
+        }
+        
+        // Update radar chart with new values
+        function updatePersonalityRadarChart(traits) {
+            if (!window.personalityRadarChart) return;
+            
+            window.personalityRadarChart.data.datasets[0].data = [
+                traits.openness,
+                traits.conscientiousness,
+                traits.extraversion, 
+                traits.agreeableness,
+                traits.neuroticism
+            ];
+            
+            window.personalityRadarChart.update();
+        }
+        
+        // Send personality update to ROS
+        function sendPersonalityUpdate(traits) {
+            if (!ros) {
+                addMessageToLog('Cannot update personality: Not connected to ROS', 'error');
+                return;
+            }
+            
+            // For each trait, call the modify_emotional_state service
+            for (const trait in traits) {
+                const modifyClient = new ROSLIB.Service({
+                    ros: ros,
+                    name: '/modify_emotional_state',
+                    serviceType: 'ros_emotion/srv/ModifyEmotionalState'
+                });
+                
+                const request = new ROSLIB.ServiceRequest({
+                    modification_type: 'personality_trait',
+                    specific_emotion: trait.toLowerCase(),
+                    value: traits[trait],
+                    reason: 'Manual adjustment from web interface',
+                    override_safety: false
+                });
+                
+                modifyClient.callService(request, function(result) {
+                    if (result.success) {
+                        addMessageToLog(`Updated personality trait ${trait} to ${traits[trait].toFixed(2)}`, 'state-change');
+                        addDebugMessage(`Personality trait ${trait} updated successfully`);
+                    } else {
+                        addMessageToLog(`Failed to update ${trait}: ${result.message}`, 'error');
+                    }
+                }, function(error) {
+                    addMessageToLog(`Error updating ${trait}: Service call failed`, 'error');
+                    addDebugMessage(`Service call error: ${error}`);
+                });
+            }
+        }
+        
+        // Fetch default personality from ROS
+        function fetchDefaultPersonality() {
+            if (!ros) {
+                addMessageToLog('Cannot fetch personality: Not connected to ROS', 'error');
+                return;
+            }
+            
+            const queryClient = new ROSLIB.Service({
+                ros: ros,
+                name: '/query_emotional_state',
+                serviceType: 'ros_emotion/srv/EmotionQuery'
+            });
+            
+            const request = new ROSLIB.ServiceRequest({
+                query_type: 'full',
+                specific_emotion: '',
+                include_description: true
+            });
+            
+            queryClient.callService(request, function(result) {
+                if (result) {
+                    // Parse personality traits from metadata
+                    try {
+                        const metadata = JSON.parse(result.emotional_state.metadata || '{}');
+                        if (metadata.personality_traits) {
+                            updatePersonalityDisplay(metadata.personality_traits);
+                            addDebugMessage('Updated personality display with data from ROS');
+                        }
+                    } catch (e) {
+                        addDebugMessage(`Error parsing personality traits: ${e.message}`);
+                    }
+                }
+            }, function(error) {
+                addMessageToLog('Failed to fetch personality data', 'error');
+                addDebugMessage(`Service call error: ${error}`);
+            });
+        }
+        
+        // Update personality display with data from ROS
+        function updatePersonalityDisplay(traits) {
+            // Update sliders
+            for (const trait in traits) {
+                const slider = document.getElementById(`${trait.toLowerCase()}-slider`);
+                const valueDisplay = document.getElementById(`${trait.toLowerCase()}-value`);
+                
+                if (slider) {
+                    slider.value = traits[trait];
+                    if (valueDisplay) {
+                        valueDisplay.textContent = traits[trait].toFixed(2);
+                    }
+                }
+            }
+            
+            // Update bars
+            updateTraitBars(traits);
+            
+            // Update radar chart (only OCEAN traits)
+            const radarData = {
+                openness: traits.openness || 0,
+                conscientiousness: traits.conscientiousness || 0,
+                extraversion: traits.extraversion || 0,
+                agreeableness: traits.agreeableness || 0,
+                neuroticism: traits.neuroticism || 0
+            };
+            
+            updatePersonalityRadarChart(radarData);
+        }
+        
+        // Wait for the page to load before connecting
+        window.addEventListener('load', function() {
+            addDebugMessage('Page loaded');
+            
+            // Initialize personality visualization
+            window.personalityRadarChart = initPersonalityRadarChart();
+            initPersonalityControls();
+            
+            // Auto-connect after 1 second
+            setTimeout(function() {
+                const wsUrl = document.getElementById('wsUrlInput').value;
+                initRosConnection(wsUrl);
+            }, 1000);
+        });
+        
+        // Add connection event listener for personality data
+        ros.on('connection', function() {
+            // Wait a bit for the system to be ready before fetching personality data
+            setTimeout(fetchDefaultPersonality, 2000);
+        });
+        
+        // Add reset button to the connection options section
+        document.addEventListener('DOMContentLoaded', function() {
+            const connectionOptions = document.querySelector('.connection-options div');
+            const resetButton = document.createElement('button');
+            resetButton.id = 'resetButton';
+            resetButton.textContent = 'Reset Connection';
+            resetButton.style.marginLeft = '10px';
+            resetButton.addEventListener('click', resetConnection);
+            connectionOptions.appendChild(resetButton);
+
+            // Add a debug button to log all current topics
+            const debugButton = document.createElement('button');
+            debugButton.id = 'debugButton';
+            debugButton.textContent = 'Debug Topics';
+            debugButton.style.marginLeft = '10px';
+            debugButton.style.backgroundColor = '#6c757d';
+            debugButton.addEventListener('click', function() {
+                if (ros) {
+                    ros.getTopics(function(result) {
+                        const topics = result.topics;
+                        const types = result.types;
+                        
+                        addDebugMessage(`Available topics (${topics.length}):`);
+                        topics.forEach((topic, index) => {
+                            addDebugMessage(`${topic} (${types[index]})`);
+                            
+                            // Also add to message log for visibility
+                            addMessageToLog(`Topic: ${topic} (${types[index]})`, 'debug');
+                        });
+                        
+                        // Check message history counts
+                        addDebugMessage('Message history counts:');
+                        for (const topic in messageHistory) {
+                            addDebugMessage(`${topic}: ${messageHistory[topic].length} messages`);
+                        }
+                    });
+                } else {
+                    addDebugMessage('Cannot debug topics: Not connected to ROS');
+                }
+            });
+            connectionOptions.appendChild(debugButton);
+
+            // Add a new button to download full history as file
+            const downloadRawButton = document.createElement('button');
+            downloadRawButton.id = 'downloadRawButton';
+            downloadRawButton.textContent = 'Save Raw Data';
+            downloadRawButton.style.marginLeft = '10px';
+            downloadRawButton.style.backgroundColor = '#6f42c1';
+            downloadRawButton.style.color = 'white';
+            downloadRawButton.addEventListener('click', function() {
+                // Create a plaintext file with the raw logs
+                try {
+                    let rawText = '';
+                    // Add a section for each topic
+                    for (const topic in messageHistory) {
+                        rawText += `\n\n========== TOPIC: ${topic} (${messageHistory[topic].length} messages) ==========\n\n`;
+                        
+                        messageHistory[topic].forEach(item => {
+                            let messageText;
+                            if (typeof item.message === 'string') {
+                                messageText = item.message;
+                            } else {
+                                // Format object messages for readability
+                                try {
+                                    messageText = formatMessage(topic, item.message);
+                                    // Remove HTML-like content
+                                    messageText = messageText.replace(/<[^>]*>/g, '');
+                                } catch (e) {
+                                    messageText = JSON.stringify(item.message);
+                                }
+                            }
+                            
+                            // Format timestamp and message
+                            rawText += `[${item.formattedTime}] ${messageText}\n`;
+                        });
+                    }
+                    
+                    // Create download link
+                    const blob = new Blob([rawText], {type: 'text/plain'});
+                    const url = URL.createObjectURL(blob);
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = url;
+                    downloadLink.download = `ros_emotion_raw_logs_${new Date().toISOString().split('T')[0]}.txt`;
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                    
+                    addDebugMessage('Raw message logs saved to text file');
+                } catch (e) {
+                    console.error('Failed to save raw logs:', e);
+                    addDebugMessage('Failed to save raw logs: ' + e.message);
+                }
+            });
+            connectionOptions.appendChild(downloadRawButton);
+            
+            // Remove emotion_visualization from history if it exists
+            if (messageHistory.emotion_visualization) {
+                delete messageHistory.emotion_visualization;
+            }
+            
+            // Remove the button for emotion_visualization if it exists
+            const emotionVisualizationTab = document.querySelector('.history-tab[data-tab="emotion_visualization"]');
+            if (emotionVisualizationTab) {
+                emotionVisualizationTab.remove();
+            }
+            
+            // Remove the option from the filter dropdown
+            const emotionVisualizationOption = document.querySelector('#historyTopicFilter option[value="emotion_visualization"]');
+            if (emotionVisualizationOption) {
+                emotionVisualizationOption.remove();
+            }
+            
+            // Initialize test publisher toggle
+            const toggle = document.getElementById('testPublisherToggle');
+            toggle.addEventListener('change', toggleTestPublisher);
+        });
+        
+        // Test publisher node control
+        function checkTestPublisherStatus() {
+            if (!ros || checkingTestPublisher) return;
+            
+            checkingTestPublisher = true;
+            document.getElementById('testPublisherStatus').textContent = 'Checking status...';
+            
+            // Use ROS service call to get node list
+            const nodeListClient = new ROSLIB.Service({
+                ros: ros,
+                name: '/rosapi/nodes',
+                serviceType: 'rosapi/Nodes'
+            });
+            
+            const request = new ROSLIB.ServiceRequest({});
+            
+            nodeListClient.callService(request, function(result) {
+                checkingTestPublisher = false;
+                const nodes = result.nodes;
+                testPublisherRunning = nodes.includes(testPublisherNodeName);
+                
+                // Update UI to reflect current status
+                updateTestPublisherUI();
+                
+                addDebugMessage(`Test publisher status checked: ${testPublisherRunning ? 'Running' : 'Stopped'}`);
+            }, function(error) {
+                checkingTestPublisher = false;
+                document.getElementById('testPublisherStatus').textContent = 'Status check failed';
+                addDebugMessage(`Error checking test publisher status: ${error}`);
+            });
+        }
+        
+        function updateTestPublisherUI() {
+            const toggle = document.getElementById('testPublisherToggle');
+            const status = document.getElementById('testPublisherStatus');
+            
+            toggle.checked = testPublisherRunning;
+            
+            if (testPublisherRunning) {
+                status.textContent = 'Running';
+                status.style.color = '#28a745';  // Green color
+            } else {
+                status.textContent = 'Stopped';
+                status.style.color = '#dc3545';  // Red color
+            }
+        }
+        
+        function toggleTestPublisher() {
+            if (!ros) {
+                addMessageToLog('Cannot control test publisher: Not connected to ROS', 'error');
+                return;
+            }
+            
+            const newState = document.getElementById('testPublisherToggle').checked;
+            const action = newState ? 'start' : 'stop';
+            
+            document.getElementById('testPublisherStatus').textContent = `${action.charAt(0).toUpperCase() + action.slice(1)}ing...`;
+            
+            // Call the node lifecycle management service
+            const lifecycleClient = new ROSLIB.Service({
+                ros: ros,
+                name: '/node_lifecycle_manager',
+                serviceType: 'ros_emotion/NodeLifecycle'
+            });
+            
+            const request = new ROSLIB.ServiceRequest({
+                node_name: 'test_input_publisher',
+                action: action
+            });
+            
+            lifecycleClient.callService(request, function(result) {
+                if (result.success) {
+                    testPublisherRunning = newState;
+                    updateTestPublisherUI();
+                    addDebugMessage(`Test publisher ${action}ed successfully`);
+                    addMessageToLog(`Test input publisher ${action}ed`, 'system');
+                } else {
+                    // If service call succeeded but operation failed
+                    addDebugMessage(`Failed to ${action} test publisher: ${result.message}`);
+                    addMessageToLog(`Failed to ${action} test input publisher: ${result.message}`, 'error');
+                    // Reset UI to actual state
+                    setTimeout(checkTestPublisherStatus, 1000);
+                }
+            }, function(error) {
+                // If service call failed
+                addDebugMessage(`Error ${action}ing test publisher: ${error}`);
+                addMessageToLog(`Error controlling test input publisher: ${error}`, 'error');
+                
+                // If the service doesn't exist, try an alternative method via a topic
+                tryAlternativeTestPublisherControl(action);
+            });
+        }
+        
+        function tryAlternativeTestPublisherControl(action) {
+            // Alternative method: publish a command to a dedicated topic
+            const cmdPublisher = new ROSLIB.Topic({
+                ros: ros,
+                name: '/node_control',
+                messageType: 'std_msgs/String'
+            });
+            
+            const command = `test_input_publisher:${action}`;
+            const message = new ROSLIB.Message({
+                data: command
+            });
+            
+            cmdPublisher.publish(message);
+            addDebugMessage(`Published alternative command: ${command}`);
+            
+            // After publishing, wait a moment and check status again
+            setTimeout(checkTestPublisherStatus, 2000);
+        }
+        
+        // Modify the existing connection function to check the publisher status upon connection
+        const originalRosOnConnection = ros.on.bind(ros, 'connection');
+        ros.on = function(eventName, callback) {
+            if (eventName === 'connection') {
+                return originalRosOnConnection(function() {
+                    callback.apply(this, arguments);
+                    
+                    // After connection is established and other subscriptions are set up,
+                    // check the status of the test publisher
+                    setTimeout(checkTestPublisherStatus, 1000);
+                    
+                    // Set up periodic status checking
+                    setInterval(checkTestPublisherStatus, 5000);
+                    
+                    // Also fetch personality data
+                    setTimeout(fetchDefaultPersonality, 2000);
+                });
+            } else {
+                return originalRosOnConnection.apply(ros, arguments);
+            }
+        };
+    </script>
+</body>
+</html> 
