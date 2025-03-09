@@ -19,6 +19,61 @@ The package uses a hybrid emotional model combining:
 - **Dimensional Model (PAD)**: Pleasure, Arousal, Dominance
 - **Basic Emotions**: Happiness, Sadness, Anger, Fear, Disgust, Surprise
 
+## Emotion Model Architecture
+
+The system uses an abstract `EmotionModel` class as the core interface for all emotion-related operations. This design provides:
+
+- **Abstraction**: Separates the implementation details from how emotional states are used
+- **Extensibility**: New emotion models can be implemented by extending the base class
+- **Consistency**: Ensures all components interact with emotions in a standardized way
+
+### EmotionModel Interface
+
+The `EmotionModel` class provides the following key methods:
+
+- **create_emotional_state()**: Creates a new emotional state with default values
+- **get_primary_emotion()**: Determines the primary emotion from the current state
+- **update_state()**: Updates the state based on decay rates over time
+- **modify_state()**: Modifies the state based on various modification types
+- **get_all_emotions()**: Returns a list of all supported emotions
+- **get_dimensions()**: Returns a list of all emotional dimensions (e.g., PAD)
+- **get_emotion_value()**: Gets the value of a specific emotion
+- **set_emotion_value()**: Sets the value of a specific emotion
+- **calculate_intensity()**: Calculates the overall intensity of the state
+- **get_emotion_color()**: Gets a color representing a specific emotion
+- **format_emotional_state()**: Formats the emotional state for display/prompts
+- **get_emotional_state_color()**: Gets a color representing the full emotional state
+
+### Built-in Emotion Models
+
+#### PADBasicEmotionModel
+
+The default implementation uses the `PADBasicEmotionModel` which combines:
+
+- **PAD Dimensional Model**: Pleasure (-1.0 to 1.0), Arousal (-1.0 to 1.0), Dominance (-1.0 to 1.0)
+- **Basic Emotions**: Happiness, Sadness, Anger, Fear, Disgust, Surprise (0.0 to 1.0)
+
+The model handles:
+- Determining primary emotions based on the highest basic emotion value
+- Calculating intensity based on both PAD dimensions and basic emotions
+- Mapping emotions to colors for visualization
+- Managing the relationship between dimensional and categorical emotion representations
+
+### Creating Custom Emotion Models
+
+To create a custom emotion model:
+
+1. Create a new class that extends `EmotionModel`
+2. Implement all the required abstract methods
+3. Register your model in the `create_emotion_model()` factory function
+4. Update the configuration to use your custom model
+
+Example configuration in `emotion_config.yaml`:
+```yaml
+emotional_state_manager:
+  emotion_model: "your_custom_model"
+```
+
 ## Installation
 
 ### Prerequisites
@@ -48,16 +103,45 @@ colcon build --packages-select ros_emotion
 source ~/ros2_ws/install/setup.bash
 ```
 
+### Docker Deployment
+
+This package includes Docker support for easy deployment and testing:
+
+```bash
+# Build and start all containers
+./cleanup_and_rebuild.sh
+
+# Start containers if already built
+./start_all.sh
+
+# Stop all containers
+docker-compose down
+```
+
+The Docker deployment includes:
+- Main ROS container with all nodes
+- Test container for running tests
+- Web interface container for visualization
+
 ## Usage
 
 ### Running the Emotion System
 
-```bash
-# Launch the complete emotion system
-ros2 launch ros_emotion emotion_publisher.launch.py
+To run the entire system:
 
-# Launch with test input publisher
-ros2 launch ros_emotion emotion_test.launch.py
+```bash
+# Using scripts (recommended)
+./start_all.sh
+
+# Or manually
+docker-compose up
+```
+
+For development and testing:
+
+```bash
+# Rebuild and restart all containers
+./cleanup_and_rebuild.sh
 ```
 
 ### Publishing Sensory Inputs
@@ -74,6 +158,9 @@ Example:
 ```bash
 # Publish a text input
 ros2 topic pub /text_input std_msgs/msg/String "data: '{\"description\": \"The robot receives a compliment\", \"intensity\": 0.8}'"
+
+# Using Docker
+docker exec -it ros_emotion_container bash -c "source /opt/ros/foxy/setup.bash && source /ros_ws/install/setup.bash && ros2 topic pub --once /sensory_input ros_emotion/msg/SensoryInput '{input_type: \"visual\", description: \"I see a cute puppy playing\", source: \"visual_sensor\", intensity: 0.8}'"
 ```
 
 ### Querying Emotional State
@@ -112,11 +199,24 @@ ros2 service call /modify_emotional_state ros_emotion/srv/EmotionModify "{modifi
 ros2 service call /modify_emotional_state ros_emotion/srv/EmotionModify "{modification_type: 'specific', specific_emotion: 'happiness', value: 0.8, reason: 'Testing', override_safety: false}"
 ```
 
+### Monitoring Emotional State
+
+You can monitor the emotional state by echoing the `/emotional_state` topic:
+
+```bash
+# Using Docker
+docker exec -it ros_emotion_container bash -c "source /opt/ros/foxy/setup.bash && source /ros_ws/install/setup.bash && ros2 topic echo /emotional_state"
+```
+
 ## Configuration
 
 The package can be configured using the YAML file in the `config` directory:
 
-- `emotion_config.yaml`: Contains configuration for all components of the emotion system
+- `emotion_config.yaml`: Contains configuration for all components of the emotion system, including:
+  - Emotion model type and parameters
+  - Default decay rates for emotions
+  - Rumination parameters
+  - Visualization settings
 
 ## Visualization
 
@@ -128,6 +228,53 @@ To view the visualization:
 2. Add a MarkerArray display
 3. Set the topic to `/emotion_visualization`
 4. Set the fixed frame to `emotion_frame`
+
+## Development
+
+### System Architecture
+
+The system uses a modular architecture with the following key components:
+
+1. **EmotionModel**: Core abstraction for emotion processing
+2. **EmotionalStateManager**: Maintains and updates the emotional state
+3. **LLMIntegration**: Interfaces with LLMs to process inputs
+4. **RuminationEngine**: Processes emotional inputs over time
+5. **VisualizationNode**: Provides visualization of the emotional state
+
+### Adding New Features
+
+#### Extending the Emotion Model
+
+To extend with a new emotion model:
+
+1. Create a new class that extends `EmotionModel` in `emotion_model.py`
+2. Implement all required abstract methods
+3. Register your model in the `create_emotion_model()` factory function
+4. Update config to use your new model
+
+#### Adding New Sensory Input Types
+
+To add new input types:
+
+1. Add a new callback method in `sensory_input_processor.py`
+2. Register the new subscriber in the constructor
+3. Update the `process_input()` method to handle the new input type
+
+#### Customizing Visualization
+
+To customize the visualization:
+
+1. Modify the marker creation methods in `visualization_node.py`
+2. Update the `get_emotional_state_color()` method in your emotion model
+
+### Testing
+
+The package includes a test input publisher for testing the system:
+
+```bash
+# Start the test input publisher
+docker exec -it ros_emotion_container bash -c "source /opt/ros/foxy/setup.bash && source /ros_ws/install/setup.bash && ros2 run ros_emotion test_input_publisher.py"
+```
 
 ## License
 
