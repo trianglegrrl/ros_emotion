@@ -1,24 +1,32 @@
-# ROS Emotion Package
+# ROS Emotion System
 
-A simple ROS 2 package that publishes "Hello World" messages to the `emotion` topic every 5 seconds, with a web interface to view ROS topics.
+A sophisticated robotic emotional intelligence system built on ROS 2, with dynamic personality traits, sensory processing, emotional state management, and natural language integration.
 
-## Requirements
+## Overview
 
-- Docker
-- Docker Compose (for running both containers together)
+The ROS Emotion System provides robots with the ability to:
+- Process and respond emotionally to sensory inputs
+- Maintain a dynamic emotional state that naturally decays over time
+- Develop personality traits that influence emotional responses
+- Process natural language inputs using OpenAI's language models
+- Visualize emotional states through a web interface
+- Engage in rumination about past experiences
 
-## Quick Start (All-in-One)
+## Quick Start
 
-To start both the ROS publisher and web interface containers at once:
+To start the entire system:
 
 ```bash
+# Copy and configure environment variables
+cp .env.example .env
+# Edit .env to add your OpenAI API key
+
+# Start all containers
 ./start_all.sh
 ```
 
-This will:
-1. Build both Docker images
-2. Start both containers
-3. Make the web interface available at http://localhost:9999
+Access the web interface at:
+- http://localhost:9999
 
 To stop everything:
 
@@ -26,83 +34,76 @@ To stop everything:
 docker-compose down
 ```
 
-## Individual Container Setup
-
-If you prefer to run the containers individually:
-
-### ROS Publisher Container
+For rebuilding after changes:
 
 ```bash
-./start_container.sh
+./cleanup_and_rebuild.sh
 ```
 
-### Web Interface Container
+## Documentation
+
+The system is divided into several modules with detailed documentation:
+
+- [**OpenAI Integration**](OpenAI_INTEGRATION.md) - Setup and usage of the OpenAI LLM integration
+- [**Testing Documentation**](TESTING.md) - Guides for testing the emotion system
+- [**ROS Emotion Package**](ros_emotion/README.md) - Core ROS package documentation
+
+## System Components
+
+- **Emotional State Manager**: Maintains the current emotional state
+- **Personality Model**: Influences how emotions are processed
+- **Sensory Input Processor**: Processes various sensory inputs
+- **LLM Integration**: Connects with OpenAI for natural language processing
+- **Rumination Engine**: Processes emotions over time
+- **Web Interface**: Visualizes the emotional state
+
+## Testing
+
+The system includes comprehensive testing tools located in the `testing/` directory:
 
 ```bash
-cd web_interface
-./start_web_interface.sh
+# Run the optimal emotion test
+./optimal_emotion_test.py
 ```
 
-Once started, you can access the web interface at:
-- http://localhost:9999
-
-The web interface allows you to:
-- View all available ROS topics
-- Subscribe to topics to see their messages in real-time
-- Refresh the topic list
-
-## Manual Setup
-
-If you prefer to run the commands manually without scripts:
-
-### Build and Run the ROS Publisher
-
-```bash
-docker build -t ros_emotion .
-docker run -it --rm --name ros_emotion_container ros_emotion
-```
-
-### Build and Run the Web Interface
-
-```bash
-cd web_interface
-docker build -t ros_web_interface .
-docker run -it --rm --name ros_web_interface_container -p 9999:9999 --network=host ros_web_interface
-```
+See [TESTING.md](TESTING.md) for detailed information about testing the system.
 
 ## Development
 
-The package contains a simple ROS 2 publisher node that publishes to the `emotion` topic. You can extend this package by:
+To extend the system:
 
-1. Adding more nodes in the `ros_emotion` directory
-2. Updating the launch file to include your new nodes
-3. Rebuilding the Docker image
+1. Add new nodes in the `ros_emotion` directory
+2. Update launch files to include your new nodes
+3. Rebuild using the cleanup_and_rebuild.sh script
 
 ## Structure
 
 ```
 ros_emotion/
-├── Dockerfile                   # ROS publisher container
-├── docker-compose.yml          # Compose file for both containers
-├── start_container.sh          # Script to start ROS publisher
-├── start_all.sh                # Script to start both containers
-├── web_interface/              # Web interface files
-│   ├── Dockerfile              # Web interface container
-│   ├── entrypoint.sh           # Web container entrypoint
-│   ├── start_web_interface.sh  # Script to start web interface
+├── Dockerfile                   # Main ROS container
+├── docker-compose.yml          # Container orchestration
+├── OpenAI_INTEGRATION.md       # OpenAI setup documentation
+├── TESTING.md                  # Testing documentation
+├── web_interface/              # Web visualization interface
+│   ├── Dockerfile              # Web container
 │   └── web/                    # Web files
-│       └── index.html          # Web interface HTML
 ├── ros_emotion/                # ROS package
+│   ├── config/                 # Configuration files
 │   ├── launch/                 # Launch files
-│   │   └── emotion_publisher.launch.py
-│   ├── resource/               # Package resources
-│   │   └── ros_emotion
-│   ├── ros_emotion/            # Python package
-│   │   ├── __init__.py
-│   │   └── publisher_node.py   # Publisher node
-│   ├── package.xml             # Package metadata
-│   └── setup.py                # Package setup
+│   ├── msg/                    # Message definitions
+│   ├── srv/                    # Service definitions
+│   └── ros_emotion/            # Python modules
+└── testing/                    # Testing tools
+    ├── scripts/                # Test scripts
+    ├── results/                # Test results
+    └── docs/                   # Testing documentation
 ```
+
+## Requirements
+
+- Docker
+- Docker Compose
+- OpenAI API key (for LLM integration)
 
 ## Viewing Messages
 
