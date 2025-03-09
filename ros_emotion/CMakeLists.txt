@@ -30,6 +30,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/EmotionQuery.srv"
   "srv/EmotionModify.srv"
   "srv/NodeLifecycle.srv"
+  "srv/FeatureFlags.srv"
   DEPENDENCIES builtin_interfaces std_msgs
 )
 
@@ -45,6 +46,7 @@ install(PROGRAMS
   ros_emotion/visualization_node.py
   ros_emotion/test_input_publisher.py
   ros_emotion/node_lifecycle_manager.py
+  ros_emotion/feature_flags_manager.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

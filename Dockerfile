@@ -26,12 +26,13 @@ RUN echo '#!/bin/bash\n\
 source /opt/ros/$ROS_DISTRO/setup.bash\n\
 source /ros_ws/install/setup.bash\n\
 mkdir -p /root/.ros/log\n\
-ros2 run ros_emotion node_lifecycle_manager.py &\n\
-ros2 run ros_emotion emotional_state_manager.py &\n\
-ros2 run ros_emotion sensory_input_processor.py &\n\
-ros2 run ros_emotion llm_integration.py &\n\
-ros2 run ros_emotion rumination_engine.py &\n\
-ros2 run ros_emotion visualization_node.py &\n\
+ros2 run ros_emotion feature_flags_manager.py &\n\
+ros2 run ros_emotion node_lifecycle_manager &\n\
+ros2 run ros_emotion emotional_state_manager &\n\
+ros2 run ros_emotion sensory_input_processor &\n\
+ros2 run ros_emotion llm_integration &\n\
+ros2 run ros_emotion rumination_engine &\n\
+ros2 run ros_emotion visualization_node &\n\
 wait\n\
 ' > /ros_ws/launch_emotion_system.sh && chmod +x /ros_ws/launch_emotion_system.sh
 

@@ -4,3 +4,4 @@
 - You should always search the repo if there are any questions about how something works.
 - We're using ROS foxy
 - ROS2 foxy does not support the `--once` flag for `ros2`
+- Prefer running any tests or operations inside the docker container. this repo is built to work inside docker.

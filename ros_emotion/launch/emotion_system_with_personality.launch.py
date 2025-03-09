@@ -41,10 +41,19 @@ def generate_launch_description():
     
     # Create the node descriptions
     nodes = [
+        # Feature Flags Manager - Add this before other nodes
+        Node(
+            package='ros_emotion',
+            executable='feature_flags_manager',
+            name='feature_flags_manager',
+            output='screen',
+            env=env_vars
+        ),
+        
         # Node Lifecycle Manager
         Node(
             package='ros_emotion',
-            executable='node_lifecycle_manager.py',
+            executable='node_lifecycle_manager',
             name='node_lifecycle_manager',
             output='screen',
             env=env_vars
@@ -53,7 +62,7 @@ def generate_launch_description():
         # Emotional State Manager
         Node(
             package='ros_emotion',
-            executable='emotional_state_manager.py',
+            executable='emotional_state_manager',
             name='emotional_state_manager',
             output='screen',
             env=env_vars,
@@ -63,7 +72,7 @@ def generate_launch_description():
         # LLM Integration
         Node(
             package='ros_emotion',
-            executable='llm_integration.py',
+            executable='llm_integration',
             name='llm_integration',
             output='screen',
             env=env_vars,
@@ -73,7 +82,7 @@ def generate_launch_description():
         # Rumination Engine
         Node(
             package='ros_emotion',
-            executable='rumination_engine.py',
+            executable='rumination_engine',
             name='rumination_engine',
             output='screen',
             env=env_vars,
@@ -83,7 +92,7 @@ def generate_launch_description():
         # Sensory Input Processor
         Node(
             package='ros_emotion',
-            executable='sensory_input_processor.py',
+            executable='sensory_input_processor',
             name='sensory_input_processor',
             output='screen',
             env=env_vars
@@ -92,7 +101,7 @@ def generate_launch_description():
         # Visualization Node
         Node(
             package='ros_emotion',
-            executable='visualization_node.py',
+            executable='visualization_node',
             name='visualization_node',
             output='screen',
             env=env_vars
@@ -102,7 +111,7 @@ def generate_launch_description():
     # Conditionally add the test input publisher
     test_input_node = Node(
         package='ros_emotion',
-        executable='test_input_publisher.py',
+        executable='test_input_publisher',
         name='test_input_publisher',
         output='screen',
         env=env_vars,

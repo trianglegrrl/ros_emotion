@@ -1,0 +1,24 @@
+# Service to manage feature flags for the ROS Emotion system
+
+# Request:
+# Operation type: get, set, list
+string operation
+
+# Feature name (for get/set operations)
+string feature_name
+
+# New value (for set operations, true/false as string)
+string value
+
+---
+# Response:
+# Success flag
+bool success
+
+# Error message if not successful
+string error_message
+
+# For get/list operations, returns the current feature flags
+string[] feature_names
+string[] feature_values
+string[] feature_descriptions 
