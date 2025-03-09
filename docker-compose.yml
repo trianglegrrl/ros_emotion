@@ -8,6 +8,14 @@ services:
     network_mode: host
     volumes:
       - ./ros_emotion:/ros_ws/src/ros_emotion
+    # Load environment variables from .env file
+    env_file:
+      - ./.env
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - ROS_EMOTION_CONFIG_PATH=${ROS_EMOTION_CONFIG_PATH:-src/ros_emotion/config/emotion_config.yaml}
+      - PERSONALITY_MODEL_TYPE=${PERSONALITY_MODEL_TYPE:-hybrid}
     # Add a command to start the main ROS nodes including the node lifecycle manager
     command: >
       bash -c "
@@ -31,6 +39,9 @@ services:
     network_mode: host
     volumes:
       - ./ros_emotion:/ros_ws/src/ros_emotion
+    # Load environment variables from .env file
+    env_file:
+      - ./.env
 
   web_interface:
     build:
