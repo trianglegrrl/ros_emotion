@@ -29,6 +29,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/EmotionalResponse.msg"
   "srv/EmotionQuery.srv"
   "srv/EmotionModify.srv"
+  "srv/NodeLifecycle.srv"
   DEPENDENCIES builtin_interfaces std_msgs
 )
 
@@ -43,6 +44,7 @@ install(PROGRAMS
   ros_emotion/rumination_engine.py
   ros_emotion/visualization_node.py
   ros_emotion/test_input_publisher.py
+  ros_emotion/node_lifecycle_manager.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

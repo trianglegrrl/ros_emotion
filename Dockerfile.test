@@ -29,12 +29,22 @@ ros2 run ros_emotion sensory_input_processor.py &\n\
 ros2 run ros_emotion llm_integration.py &\n\
 ros2 run ros_emotion rumination_engine.py &\n\
 ros2 run ros_emotion visualization_node.py &\n\
-ros2 run ros_emotion test_input_publisher.py &\n\
 wait\n\
 ' > /ros_ws/launch_emotion_test.sh && chmod +x /ros_ws/launch_emotion_test.sh
 
-# Add setup to entrypoint
-RUN echo '. /ros_ws/install/setup.bash' >> /ros_entrypoint.sh
+# Create a custom entrypoint script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+# setup ros2 environment\n\
+source "/opt/ros/$ROS_DISTRO/setup.bash"\n\
+# source the workspace\n\
+source "/ros_ws/install/setup.bash"\n\
+# execute the command\n\
+exec "$@"\n\
+' > /ros_custom_entrypoint.sh && chmod +x /ros_custom_entrypoint.sh
+
+# Use the custom entrypoint
+ENTRYPOINT ["/ros_custom_entrypoint.sh"]
 
 # Command to run when container starts
 CMD ["/ros_ws/launch_emotion_test.sh"] 

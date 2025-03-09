@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-numpy \
     python3-yaml \
+    python3-psutil \
     && rm -rf /var/lib/apt/lists/* \
     && pip3 install requests \
     && cd /ros_ws \
@@ -25,6 +26,7 @@ RUN echo '#!/bin/bash\n\
 source /opt/ros/$ROS_DISTRO/setup.bash\n\
 source /ros_ws/install/setup.bash\n\
 mkdir -p /root/.ros/log\n\
+ros2 run ros_emotion node_lifecycle_manager.py &\n\
 ros2 run ros_emotion emotional_state_manager.py &\n\
 ros2 run ros_emotion sensory_input_processor.py &\n\
 ros2 run ros_emotion llm_integration.py &\n\
@@ -33,8 +35,19 @@ ros2 run ros_emotion visualization_node.py &\n\
 wait\n\
 ' > /ros_ws/launch_emotion_system.sh && chmod +x /ros_ws/launch_emotion_system.sh
 
-# Add setup to entrypoint
-RUN echo '. /ros_ws/install/setup.bash' >> /ros_entrypoint.sh
+# Create a custom entrypoint script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+# setup ros2 environment\n\
+source "/opt/ros/$ROS_DISTRO/setup.bash"\n\
+# source the workspace\n\
+source "/ros_ws/install/setup.bash"\n\
+# execute the command\n\
+exec "$@"\n\
+' > /ros_custom_entrypoint.sh && chmod +x /ros_custom_entrypoint.sh
+
+# Use the custom entrypoint
+ENTRYPOINT ["/ros_custom_entrypoint.sh"]
 
 # Command to run when container starts
 CMD ["/ros_ws/launch_emotion_system.sh"] 

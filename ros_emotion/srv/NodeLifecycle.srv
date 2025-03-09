@@ -1,0 +1,7 @@
+# Request
+string node_name     # Name of the node to control
+string action        # Action to perform: "start" or "stop"
+---
+# Response
+bool success         # Whether the operation was successful
+string message       # Additional information or error message 

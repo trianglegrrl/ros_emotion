@@ -345,6 +345,53 @@
             background-color: #dc3545;
             color: white;
         }
+        
+        /* Toggle Switch Styles */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch-checkbox {
+            height: 0;
+            width: 0;
+            visibility: hidden;
+            position: absolute;
+        }
+        
+        .toggle-switch-label {
+            cursor: pointer;
+            text-indent: -9999px;
+            width: 50px;
+            height: 24px;
+            background: #ccc;
+            display: block;
+            border-radius: 24px;
+            position: relative;
+        }
+        
+        .toggle-switch-label:after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 20px;
+            transition: 0.3s;
+        }
+        
+        .toggle-switch-checkbox:checked + .toggle-switch-label {
+            background: #28a745;
+        }
+        
+        .toggle-switch-checkbox:checked + .toggle-switch-label:after {
+            left: calc(100% - 2px);
+            transform: translateX(-100%);
+        }
     </style>
 </head>
 <body>
@@ -366,6 +413,15 @@
                 <label for="wsUrlInput">WebSocket URL:</label>
                 <input type="text" id="wsUrlInput" value="ws://localhost:9090" style="width: 250px;">
                 <button id="connectButton">Connect</button>
+            </div>
+            
+            <div style="margin-top: 15px; display: flex; align-items: center;">
+                <label for="testPublisherToggle" style="margin-right: 10px;">Test Input Publisher:</label>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="testPublisherToggle" class="toggle-switch-checkbox">
+                    <label for="testPublisherToggle" class="toggle-switch-label"></label>
+                </div>
+                <span id="testPublisherStatus" style="margin-left: 10px; font-size: 0.9em; color: #6c757d;">Checking status...</span>
             </div>
         </div>
         
@@ -514,6 +570,11 @@
             searchTerm: '',
             filteredMessages: []
         };
+        
+        // Test publisher node control
+        let testPublisherRunning = false;
+        let testPublisherNodeName = '/test_input_publisher';  // The node name to check for
+        let checkingTestPublisher = false;
         
         function addDebugMessage(message) {
             const debugInfo = document.getElementById('debugInfo');
@@ -1835,6 +1896,144 @@
                 emotionVisualizationOption.remove();
             }
         });
+
+        // Test publisher node control
+        function checkTestPublisherStatus() {
+            if (!ros || checkingTestPublisher) return;
+            
+            checkingTestPublisher = true;
+            document.getElementById('testPublisherStatus').textContent = 'Checking status...';
+            
+            // Use ROS service call to get node list
+            const nodeListClient = new ROSLIB.Service({
+                ros: ros,
+                name: '/rosapi/nodes',
+                serviceType: 'rosapi/Nodes'
+            });
+            
+            const request = new ROSLIB.ServiceRequest({});
+            
+            nodeListClient.callService(request, function(result) {
+                checkingTestPublisher = false;
+                const nodes = result.nodes;
+                testPublisherRunning = nodes.includes(testPublisherNodeName);
+                
+                // Update UI to reflect current status
+                updateTestPublisherUI();
+                
+                addDebugMessage(`Test publisher status checked: ${testPublisherRunning ? 'Running' : 'Stopped'}`);
+            }, function(error) {
+                checkingTestPublisher = false;
+                document.getElementById('testPublisherStatus').textContent = 'Status check failed';
+                addDebugMessage(`Error checking test publisher status: ${error}`);
+            });
+        }
+        
+        function updateTestPublisherUI() {
+            const toggle = document.getElementById('testPublisherToggle');
+            const status = document.getElementById('testPublisherStatus');
+            
+            toggle.checked = testPublisherRunning;
+            
+            if (testPublisherRunning) {
+                status.textContent = 'Running';
+                status.style.color = '#28a745';  // Green color
+            } else {
+                status.textContent = 'Stopped';
+                status.style.color = '#dc3545';  // Red color
+            }
+        }
+        
+        function toggleTestPublisher() {
+            if (!ros) {
+                addMessageToLog('Cannot control test publisher: Not connected to ROS', 'error');
+                return;
+            }
+            
+            const newState = document.getElementById('testPublisherToggle').checked;
+            const action = newState ? 'start' : 'stop';
+            
+            document.getElementById('testPublisherStatus').textContent = `${action.charAt(0).toUpperCase() + action.slice(1)}ing...`;
+            
+            // Call the node lifecycle management service
+            const lifecycleClient = new ROSLIB.Service({
+                ros: ros,
+                name: '/node_lifecycle_manager',
+                serviceType: 'ros_emotion/NodeLifecycle'
+            });
+            
+            const request = new ROSLIB.ServiceRequest({
+                node_name: 'test_input_publisher',
+                action: action
+            });
+            
+            lifecycleClient.callService(request, function(result) {
+                if (result.success) {
+                    testPublisherRunning = newState;
+                    updateTestPublisherUI();
+                    addDebugMessage(`Test publisher ${action}ed successfully`);
+                    addMessageToLog(`Test input publisher ${action}ed`, 'system');
+                } else {
+                    // If service call succeeded but operation failed
+                    addDebugMessage(`Failed to ${action} test publisher: ${result.message}`);
+                    addMessageToLog(`Failed to ${action} test input publisher: ${result.message}`, 'error');
+                    // Reset UI to actual state
+                    setTimeout(checkTestPublisherStatus, 1000);
+                }
+            }, function(error) {
+                // If service call failed
+                addDebugMessage(`Error ${action}ing test publisher: ${error}`);
+                addMessageToLog(`Error controlling test input publisher: ${error}`, 'error');
+                
+                // If the service doesn't exist, try an alternative method via a topic
+                tryAlternativeTestPublisherControl(action);
+            });
+        }
+        
+        function tryAlternativeTestPublisherControl(action) {
+            // Alternative method: publish a command to a dedicated topic
+            const cmdPublisher = new ROSLIB.Topic({
+                ros: ros,
+                name: '/node_control',
+                messageType: 'std_msgs/String'
+            });
+            
+            const command = `test_input_publisher:${action}`;
+            const message = new ROSLIB.Message({
+                data: command
+            });
+            
+            cmdPublisher.publish(message);
+            addDebugMessage(`Published alternative command: ${command}`);
+            
+            // After publishing, wait a moment and check status again
+            setTimeout(checkTestPublisherStatus, 2000);
+        }
+
+        // Add event listener for toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggle = document.getElementById('testPublisherToggle');
+            toggle.addEventListener('change', toggleTestPublisher);
+        });
+
+        // Modify the existing connection function to check the publisher status upon connection
+        const originalOnConnection = ros.on.bind(ros, 'connection');
+        ros.on = function(eventName, callback) {
+            if (eventName === 'connection') {
+                return originalOnConnection(function() {
+                    callback.apply(this, arguments);
+                    
+                    // After connection is established and other subscriptions are set up,
+                    // check the status of the test publisher
+                    setTimeout(checkTestPublisherStatus, 1000);
+                    
+                    // Set up periodic status checking
+                    setInterval(checkTestPublisherStatus, 5000);
+                });
+            } else {
+                return originalOnConnection.apply(ros, arguments);
+            }
+        };
     </script>
 </body>
 </html> 

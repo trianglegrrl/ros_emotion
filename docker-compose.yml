@@ -8,6 +8,19 @@ services:
     network_mode: host
     volumes:
       - ./ros_emotion:/ros_ws/src/ros_emotion
+    # Add a command to start the main ROS nodes including the node lifecycle manager
+    command: >
+      bash -c "
+        source /opt/ros/$${ROS_DISTRO}/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        ros2 run ros_emotion node_lifecycle_manager.py &
+        ros2 run ros_emotion emotional_state_manager.py &
+        ros2 run ros_emotion llm_integration.py &
+        ros2 run ros_emotion rumination_engine.py &
+        ros2 run ros_emotion sensory_input_processor.py &
+        ros2 run ros_emotion visualization_node.py &
+        tail -f /dev/null
+      "
 
   ros_emotion_test:
     build:
