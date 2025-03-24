@@ -2,14 +2,26 @@
 
 import numpy as np
 from abc import ABC, abstractmethod
+
+# Fix import of custom messages and utils
 try:
-    # For running as a ROS node
-    from ros_emotion.msg import EmotionalState
-    import ros_emotion.utils as utils
+    # Try ROS message packages first
+    from ros_emotion_msgs.msg import EmotionalState
 except ImportError:
-    # For testing within the package
-    from ..msg import EmotionalState
-    from . import utils
+    # Fall back to local message definition
+    from ros_emotion.msg import EmotionalState
+
+# Fix utils import
+try:
+    from ros_emotion.utils.config_loader import load_config
+    from ros_emotion.utils import LLMClient
+except ImportError:
+    # Fall back to direct imports
+    from .utils.config_loader import load_config
+    from .utils import LLMClient
+
+import os
+import time
 
 class EmotionModel(ABC):
     """
